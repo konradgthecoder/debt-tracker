@@ -2513,8 +2513,9 @@ async function runInsights() {
   const snapshotContent = buildPrompt(econ)
     + (memoryNotes.trim() ? `\n\nPERSONAL MEMORY NOTES (I have previously told you):\n${memoryNotes.trim()}` : '');
 
-  // Fresh analysis always starts from the snapshot, then replays prior history
-  const messages = [{ role: 'user', content: snapshotContent }, ...chatHistory];
+  // Replay prior history, then the fresh snapshot as the final user turn so the
+  // request always ends with a user message (the API rejects a trailing assistant turn).
+  const messages = [...chatHistory, { role: 'user', content: snapshotContent }];
 
   try {
     const accumulated = await streamToElement(key, messages, out, null);
