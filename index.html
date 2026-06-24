@@ -2,6 +2,14 @@
 <title>Debt Tracker — Konrad</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* themed scrollbars to match the dark UI */
+* { scrollbar-width: thin; scrollbar-color: #254567 transparent; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #254567; border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #3A5878; background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }
 :root {
   --navy:   #0B1622;
   --card:   #112033;
