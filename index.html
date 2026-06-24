@@ -287,6 +287,7 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .chat-textarea::placeholder { color: var(--dim); }
 .chat-meta { display: flex; justify-content: space-between; align-items: center; }
 .chat-counter { font-size: 0.7rem; color: var(--dim); }
+.cad-pln { color: var(--muted); font-size: 0.78rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
 
 /* ─── Projection ─── */
 .proj-wrap {
@@ -343,7 +344,7 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 }
 .sim-extra-input:focus { border-color: var(--teal); }
 .sim-marker { font-size: 0.72rem; color: var(--dim); }
-.sim-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
+.sim-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.8rem; }
 .sim-stat { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 0.9rem; }
 .sim-stat .ss-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
 .sim-stat .ss-val { font-size: 1rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
@@ -545,7 +546,7 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
       </div>
 
       <div class="snap-card full">
-        <div class="snap-label">Savings &amp; runway</div>
+        <div class="snap-label">Savings &amp; emergency fund</div>
         <div class="snap-rows">
           <div class="snap-row">
             <span class="key">Current savings / buffer</span>
@@ -555,10 +556,20 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
             <span class="key">Total monthly outgoings</span>
             <span class="amt" id="s-monthly-expenses" style="color:var(--muted)">—</span>
           </div>
+          <div class="snap-row">
+            <span class="key">Emergency fund target
+              <input class="editable" id="s-ef-months" type="text" inputmode="decimal" value="6"
+                     style="width:34px;text-align:center;padding:0.1rem 0.2rem;margin:0 0.2rem" oninput="onEfMonths(this.value)"> mo</span>
+            <span class="amt" id="s-ef-target" style="color:var(--muted)">—</span>
+          </div>
           <div class="snap-divider"></div>
           <div class="snap-total-row">
             <span class="snap-total-key">🛟 Runway</span>
             <span class="snap-total-val" id="s-runway">—</span>
+          </div>
+          <div class="snap-total-row">
+            <span class="snap-total-key" id="s-ef-gap-key">🎯 Fund gap</span>
+            <span class="snap-total-val" id="s-ef-gap">—</span>
           </div>
         </div>
       </div>
@@ -649,11 +660,18 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
             <input type="text" inputmode="decimal" class="sim-extra-input" id="sim-extra" value="0" onchange="onExtraInput(this.value)">
             <span class="insights-label">PLN</span>
           </div>
+          <div class="sim-row">
+            <label class="insights-label">Of the extra, save</label>
+            <input type="range" class="sim-slider" id="sim-split" min="0" max="100" value="30" style="max-width:160px" oninput="onSplitInput(this.value)">
+            <span class="insights-label" id="sim-split-label">30%</span>
+            <span class="sim-marker">to emergency fund until it's full, rest to debt</span>
+          </div>
           <span class="sim-marker" id="sim-marker"></span>
         </div>
         <div class="sim-stats">
           <div class="sim-stat"><div class="ss-label">Consumer-free</div><div class="ss-val" id="sim-consumer">—</div></div>
           <div class="sim-stat"><div class="ss-label">Fully debt-free</div><div class="ss-val" id="sim-full">—</div></div>
+          <div class="sim-stat"><div class="ss-label">Emergency fund full</div><div class="ss-val" id="sim-fund">—</div></div>
           <div class="sim-stat"><div class="ss-label">Interest saved vs minimums</div><div class="ss-val" id="sim-saved">—</div></div>
         </div>
       </div>
@@ -1062,7 +1080,7 @@ function renderDebtTable() {
     const headerBalStr = groupBalPLN > 0 ? fmt(groupBalPLN) : '—';
     const headerMinStr = groupMinPLN > 0 ? fmt(groupMinPLN) : '—';
     const cadNote = isForeign && S.cadRate
-      ? `<div style="color:var(--dim);font-size:0.7rem;margin-top:1px">≈${fmtCAD(groupBal)}</div>` : '';
+      ? `<div class="cad-pln" style="color:var(--dim)">≈ ${fmtCAD(groupBal)}</div>` : '';
     htr.innerHTML = `
       <td></td>
       <td>
@@ -1091,7 +1109,7 @@ function renderDebtTable() {
       // for foreign: show CAD balance, PLN equivalent in computed cols
       const plnBal = isForeign && S.cadRate ? (parseFloat(d.balance)||0) * S.cadRate : null;
       const balCell = isForeign && plnBal
-        ? `<span style="font-size:0.8em">${balInp}</span><br><span style="color:#A882FF;font-size:0.72em">≈${fmt(plnBal)}</span>`
+        ? `${balInp}<div class="cad-pln">≈ ${fmt(plnBal)}</div>`
         : balInp;
       tr.innerHTML = `
         <td class="drag-handle">⠿</td>
@@ -1283,11 +1301,36 @@ function recalc() {
     freeEl.style.color  = free > 2000 ? 'var(--green)' : free > 0 ? 'var(--amber)' : 'var(--coral)';
   } else { freeEl.textContent = '—'; freeEl.style.color = 'var(--text)'; }
 
+  const efMonths = projState.efMonths || 0;
   const runEl = document.getElementById('s-runway');
   if (runway !== null) {
     runEl.textContent = fmtMo(runway);
-    runEl.style.color = runway >= 6 ? 'var(--green)' : runway >= 1 ? 'var(--amber)' : 'var(--coral)';
+    runEl.style.color = runway >= efMonths ? 'var(--green)' : runway >= 1 ? 'var(--amber)' : 'var(--coral)';
   } else { runEl.textContent = '—'; runEl.style.color = 'var(--text)'; }
+
+  // emergency fund target & gap
+  const efTgt = obligations * efMonths;
+  const savingsNow = parseFloat(S.savings) || 0;
+  const efTgtEl = document.getElementById('s-ef-target');
+  const efGapEl = document.getElementById('s-ef-gap');
+  const efGapKey = document.getElementById('s-ef-gap-key');
+  if (efTgt > 0) {
+    efTgtEl.textContent = fmt(efTgt);
+    const gap = efTgt - savingsNow;
+    if (gap > 0) {
+      efGapKey.textContent = '🎯 Fund gap';
+      efGapEl.textContent = fmt(gap);
+      efGapEl.style.color = 'var(--amber)';
+    } else {
+      efGapKey.textContent = '🎯 Fund';
+      efGapEl.textContent = 'fully funded ✓';
+      efGapEl.style.color = 'var(--green)';
+    }
+  } else {
+    efTgtEl.textContent = '—';
+    efGapEl.textContent = '—'; efGapEl.style.color = 'var(--text)';
+    efGapKey.textContent = '🎯 Fund gap';
+  }
 
   // payoff progress bars
   const ppEl = document.getElementById('payoff-progress');
@@ -1328,7 +1371,19 @@ function recalc() {
 
 // ─── Payoff projection engine ──────────────────────────────────────────────
 const PROJ_STORAGE = 'debt_tracker_proj';
-let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator' };
+let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, split: 0.30 };
+
+// emergency-fund target (PLN) = N months of total outgoings (matches Runway's basis)
+function efTarget() {
+  const obligations = (_calc.totalMin || 0) + ((S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0));
+  return obligations * (projState.efMonths || 0);
+}
+// savings options for the engine; null when there's no target so behaviour is unchanged
+function simOpts() {
+  const target = efTarget();
+  if (!(target > 0)) return null;
+  return { savings: parseFloat(S.savings) || 0, target, split: projState.split || 0 };
+}
 
 function loadProjState() {
   try { Object.assign(projState, JSON.parse(localStorage.getItem(PROJ_STORAGE) || '{}')); } catch {}
@@ -1359,7 +1414,7 @@ function parseMonthAbs(label) {
 function lockPlan() {
   const debts = projDebts();
   if (!debts.length) { toast('Add debts before locking a plan', 'err'); return; }
-  const sim = simulate(debts, projState.extra || 0, projState.strategy);
+  const sim = simulate(debts, projState.extra || 0, projState.strategy, simOpts());
   planState = {
     startAbs:      monthAbsNow(),
     startLabel:    nowLabel(),
@@ -1425,8 +1480,10 @@ function orderDebts(debts, strategy) {
 }
 
 // Simulate month-by-month. extra = additional PLN/mo on top of all minimums.
-// Returns { months, series:[totalBal per month], consumerMonth, fullyMonth, totalInterest }
-function simulate(debts, extra, strategy) {
+// opts (optional): { savings, target, split } — divert part of `extra` into an
+// emergency fund until it reaches `target`, then send all of `extra` to debt.
+// Returns { months, series, consumerMonth, fullyMonth, totalInterest, fundFullMonth, savingsSeries }
+function simulate(debts, extra, strategy, opts) {
   const order = orderDebts(debts, strategy);
   let state = order.map(d => ({ ...d }));
   const start = state.reduce((s, d) => s + d.bal, 0);
@@ -1434,15 +1491,32 @@ function simulate(debts, extra, strategy) {
   let totalInterest = 0, consumerMonth = null, fullyMonth = null;
   const MAX = 1200;
 
+  let savings = opts ? (opts.savings || 0) : 0;
+  const target = opts ? (opts.target || 0) : 0;
+  const split  = opts ? (opts.split || 0)  : 0;
+  let fundFullMonth = (opts && savings >= target - 0.005 && target > 0) ? 0 : null;
+  const savingsSeries = [savings];
+
   for (let m = 1; m <= MAX; m++) {
     const active = state.filter(d => d.bal > 0.005);
-    if (!active.length) { fullyMonth = fullyMonth ?? m - 1; break; }
+    if (!active.length) { fullyMonth = fullyMonth ?? m - 1; savingsSeries.push(savings); break; }
 
     // 1. accrue interest
     active.forEach(d => { const i = d.bal * (d.rate / 100 / 12); d.bal += i; totalInterest += i; });
 
-    // 2. budget = all minimums (of active) + extra
-    let budget = active.reduce((s, d) => s + d.min, 0) + extra;
+    // 1b. divert part of the extra to the emergency fund until it's full
+    let debtExtra = extra;
+    if (opts && savings < target - 0.005) {
+      let toSavings = extra * split;
+      const room = target - savings;
+      if (toSavings > room) toSavings = room;
+      savings += toSavings;
+      debtExtra = extra - toSavings;
+      if (fundFullMonth === null && savings >= target - 0.005) fundFullMonth = m;
+    }
+
+    // 2. budget = all minimums (of active) + debt's share of the extra
+    let budget = active.reduce((s, d) => s + d.min, 0) + debtExtra;
 
     // 3. pay minimums
     active.forEach(d => { const p = Math.min(d.min, d.bal, budget); d.bal -= p; budget -= p; });
@@ -1462,12 +1536,13 @@ function simulate(debts, extra, strategy) {
       consumerMonth = m;
     const tot = state.reduce((s, d) => s + d.bal, 0);
     series.push(tot);
+    savingsSeries.push(savings);
 
     if (state.every(d => d.bal <= 0.005)) { fullyMonth = m; break; }
     // divergence guard: a positive-rate debt with too small a payment grows without bound
     if (tot > start * 1.5 && m > 12) { fullyMonth = null; break; }
   }
-  return { series, consumerMonth, fullyMonth, totalInterest, months: series.length - 1 };
+  return { series, consumerMonth, fullyMonth, totalInterest, fundFullMonth, savingsSeries, months: series.length - 1 };
 }
 
 function monthsToDate(m) {
@@ -1504,21 +1579,28 @@ function renderProjection() {
   slider.value = Math.round(projState.extra);
   extraInp.value = projState.extra.toLocaleString('en-US', { maximumFractionDigits: 0 });
   stratSel.value = projState.strategy;
+  const splitSlider = document.getElementById('sim-split');
+  splitSlider.value = Math.round((projState.split || 0) * 100);
+  document.getElementById('sim-split-label').textContent = Math.round((projState.split || 0) * 100) + '%';
+  const efInp = document.getElementById('s-ef-months');
+  if (efInp && document.activeElement !== efInp) efInp.value = projState.efMonths;
+
+  const opts = simOpts();
 
   document.getElementById('sim-marker').textContent = free > 0
     ? `Free cash ceiling: ${fmt(free)}/mo (income − minimums − fixed costs). Hidden costs make real room lower.`
     : 'Set your income above to enable the slider.';
 
   if (!debts.length) {
-    ['ms-consumer','ms-full','sim-consumer','sim-full','sim-saved'].forEach(id => document.getElementById(id).textContent = '—');
+    ['ms-consumer','ms-full','sim-consumer','sim-full','sim-fund','sim-saved'].forEach(id => document.getElementById(id).textContent = '—');
     document.getElementById('cmp-table').innerHTML = '<tr><td>Add debts to compare strategies.</td></tr>';
     renderPlanStrip();
     drawChart(null);
     return;
   }
 
-  const sim = simulate(debts, projState.extra, projState.strategy);
-  const base = simulate(debts, 0, projState.strategy); // minimums-only baseline
+  const sim = simulate(debts, projState.extra, projState.strategy, opts);
+  const base = simulate(debts, 0, projState.strategy); // minimums-only baseline (debt only)
   // baseline only meaningful if minimums alone clear everything; a positive-rate
   // debt with no minimum never amortizes (interest → ∞), so saved is undefined.
   const noMinDebt = debts.find(d => d.rate > 0 && d.min <= 0);
@@ -1535,12 +1617,17 @@ function renderProjection() {
   document.getElementById('sim-consumer').textContent = monthsToDate(sim.consumerMonth);
   document.getElementById('sim-full').textContent = monthsToDate(sim.fullyMonth);
   document.getElementById('sim-saved').textContent = saved != null && saved > 0 ? fmt(saved) : '—';
+  const fundEl = document.getElementById('sim-fund');
+  if (!opts) fundEl.textContent = 'set target';
+  else if (sim.fundFullMonth === 0) fundEl.textContent = 'already met';
+  else if (sim.fundFullMonth != null) fundEl.textContent = monthsToDate(sim.fundFullMonth);
+  else fundEl.textContent = (projState.split > 0 ? '—' : 'add a split');
   if (noMinDebt) {
     document.getElementById('sim-marker').textContent =
       `⚠ "${noMinDebt.name}" has no minimum payment set — at ${noMinDebt.rate}% it only clears once the overpayment reaches it. Set a minimum for an accurate baseline.`;
   }
 
-  renderComparison(debts, projState.extra);
+  renderComparison(debts, projState.extra, opts);
   renderPlanStrip();
   drawChart(sim);
 }
@@ -1588,14 +1675,14 @@ function renderPlanStrip() {
   nudge.style.display = due ? '' : 'none';
 }
 
-function renderComparison(debts, extra) {
+function renderComparison(debts, extra, opts) {
   const strategies = [
     { key: 'avalanche', label: 'Avalanche' },
     { key: 'snowball',  label: 'Snowball' },
     { key: 'manual',    label: 'Manual order' },
   ];
   const rows = strategies.map(s => {
-    const r = simulate(debts, extra, s.key);
+    const r = simulate(debts, extra, s.key, opts);
     return { ...s, ...r };
   });
   const bestFull = Math.min(...rows.filter(r => r.fullyMonth != null).map(r => r.fullyMonth));
@@ -1734,19 +1821,34 @@ function toggleZoom() {
   document.getElementById('proj-zoom').textContent = 'Zoom: ' + (projState.zoom === 'consumer' ? 'consumer window' : 'full horizon');
   saveProjState(); renderProjection();
 }
+function onSplitInput(v) {
+  projState.split = Math.max(0, Math.min(1, (parseFloat(v) || 0) / 100));
+  document.getElementById('sim-split-label').textContent = Math.round(projState.split * 100) + '%';
+  saveProjState(); renderProjection();
+}
+function onEfMonths(v) {
+  projState.efMonths = Math.max(0, parseNum(v) || 0);
+  saveProjState(); recalc();
+}
 
 // projection summary for the AI prompt
 function projectionSummary() {
   const debts = projDebts();
   if (!debts.length) return '';
-  const sim = simulate(debts, projState.extra || 0, projState.strategy);
+  const opts = simOpts();
+  const sim = simulate(debts, projState.extra || 0, projState.strategy, opts);
   const order = orderDebts(debts, projState.strategy).map(d => d.name).join(' → ');
+  const target = efTarget();
+  const fundLine = opts
+    ? `- Emergency fund: target ${fmt(target)} (${projState.efMonths} months of outgoings), currently ${fmt(parseFloat(S.savings) || 0)}; of each ${fmt(projState.extra || 0)} extra, ${Math.round((projState.split||0)*100)}% goes to savings until the fund is full (${sim.fundFullMonth === 0 ? 'already met' : sim.fundFullMonth != null ? monthsToDate(sim.fundFullMonth) : 'not reached in horizon'}), the rest to debt`
+    : `- Emergency fund: no target set`;
   return `\nPAYOFF PROJECTION (computed by the tracker engine — reason about THESE numbers, do not re-derive)
 - Strategy: ${projState.strategy} (payoff order: ${order})
 - Simulated extra overpayment: ${fmt(projState.extra || 0)}/mo on top of all minimums
 - Consumer debt-free (excl. mortgage): ${monthsToDate(sim.consumerMonth)}${sim.consumerMonth != null ? ` (${monthsLabel(sim.consumerMonth)})` : ''}
 - Fully debt-free (incl. mortgage): ${monthsToDate(sim.fullyMonth)}${sim.fullyMonth != null ? ` (${monthsLabel(sim.fullyMonth)})` : ''}
 - Total interest remaining under this plan: ${fmt(sim.totalInterest)}
+${fundLine}
 `;
 }
 
