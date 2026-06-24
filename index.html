@@ -293,6 +293,27 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   background: var(--card); border: 1px solid var(--border);
   border-radius: 10px; padding: 1.2rem 1.4rem; display: flex; flex-direction: column; gap: 1.1rem;
 }
+.plan-strip {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;
+  background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem;
+}
+.plan-strip.on-track { border-color: rgba(34,201,154,0.4); }
+.plan-strip.behind   { border-color: rgba(244,86,106,0.4); }
+.plan-strip.ahead    { border-color: rgba(15,184,160,0.45); }
+.plan-strip-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 200px; }
+.plan-strip-head { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+.plan-strip-head .tag { font-weight: 700; }
+.plan-strip-head .tag.ok { color: var(--green); }
+.plan-strip-head .tag.ahead { color: var(--teal); }
+.plan-strip-head .tag.behind { color: var(--coral); }
+.plan-strip-sub  { font-size: 0.74rem; color: var(--muted); }
+.plan-strip-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.plan-nudge {
+  font-size: 0.74rem; color: var(--amber); background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.3); border-radius: 6px; padding: 0.3rem 0.6rem; cursor: pointer;
+  font-family: inherit;
+}
+.plan-nudge:hover { background: rgba(245,158,11,0.18); }
 .proj-milestones { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
 .proj-ms {
   background: var(--card2); border: 1px solid var(--border); border-radius: 8px;
@@ -552,6 +573,9 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
       <div class="section-line"></div>
       <button class="btn btn-ghost section-action" onclick="snapshotNow()">📸 Snapshot now</button>
     </div>
+    <p style="font-size:0.78rem;color:var(--muted);margin:-0.3rem 0 0.6rem;">
+      Each month, edit your balances above as you pay down, then hit <strong>Snapshot now</strong> to freeze that month's totals here. Those snapshots become the amber dots on the projection chart — your actual progress against the plan.
+    </p>
     <div class="table-wrap">
       <table class="log-table">
         <thead>
@@ -578,6 +602,17 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
       <div class="section-line"></div>
     </div>
     <div class="proj-wrap">
+      <div class="plan-strip" id="plan-strip">
+        <div class="plan-strip-main">
+          <span class="plan-strip-head" id="plan-head">No plan locked yet</span>
+          <span class="plan-strip-sub" id="plan-sub">Set your overpayment in the simulator below, then lock it as your plan to track against.</span>
+        </div>
+        <div class="plan-strip-actions" id="plan-actions">
+          <button class="plan-nudge" id="plan-nudge" style="display:none" onclick="snapshotNow()">📸 Log this month</button>
+          <button class="btn btn-primary" id="plan-lock-btn" onclick="lockPlan()">Lock this plan</button>
+          <button class="btn btn-ghost" id="plan-clear-btn" style="display:none" onclick="clearPlan()">Reset plan</button>
+        </div>
+      </div>
       <div class="proj-milestones">
         <div class="proj-ms">
           <span class="ms-label">Consumer debt-free</span>
@@ -633,8 +668,9 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
       <div class="proj-panel" id="panel-chart">
         <div class="proj-chart-head">
           <div class="proj-legend">
-            <span><span class="dot" style="background:var(--teal)"></span>Projected total debt</span>
-            <span><span class="dot" style="background:var(--amber)"></span>Recorded snapshots</span>
+            <span><span class="dot" style="background:var(--teal)"></span>Forecast from today</span>
+            <span><span class="dot" style="background:var(--muted)"></span>Locked plan</span>
+            <span><span class="dot" style="background:var(--amber)"></span>Your snapshots</span>
           </div>
           <button class="proj-zoom-btn" id="proj-zoom" onclick="toggleZoom()">Zoom: consumer window</button>
         </div>
@@ -1299,6 +1335,75 @@ function loadProjState() {
 }
 function saveProjState() { localStorage.setItem(PROJ_STORAGE, JSON.stringify(projState)); }
 
+// ─── Locked plan (baseline to track actuals against) ────────────────────────
+const PLAN_STORAGE = 'debt_tracker_plan';
+let planState = null; // { startAbs, startLabel, series:[], extra, strategy }
+
+function loadPlan() {
+  try { planState = JSON.parse(localStorage.getItem(PLAN_STORAGE)) || null; } catch { planState = null; }
+}
+function savePlan() {
+  if (planState) localStorage.setItem(PLAN_STORAGE, JSON.stringify(planState));
+  else localStorage.removeItem(PLAN_STORAGE);
+}
+function monthAbsNow() { const d = new Date(); return d.getFullYear() * 12 + d.getMonth(); }
+function parseMonthAbs(label) {
+  if (!label) return null;
+  const parts = String(label).trim().split(/\s+/);
+  const mi = MONTHS.indexOf(parts[0]);
+  const yr = parseInt(parts[1], 10);
+  if (mi < 0 || isNaN(yr)) return null;
+  return yr * 12 + mi;
+}
+
+function lockPlan() {
+  const debts = projDebts();
+  if (!debts.length) { toast('Add debts before locking a plan', 'err'); return; }
+  const sim = simulate(debts, projState.extra || 0, projState.strategy);
+  planState = {
+    startAbs:      monthAbsNow(),
+    startLabel:    nowLabel(),
+    series:        sim.series,
+    extra:         projState.extra || 0,
+    strategy:      projState.strategy,
+    startDebt:     sim.series[0],
+    consumerMonth: sim.consumerMonth,
+    fullyMonth:    sim.fullyMonth,
+  };
+  savePlan();
+  renderProjection();
+  toast('Plan locked ✓ — snapshot monthly to track it', 'ok');
+}
+function clearPlan() {
+  if (!confirm('Reset your locked plan? Your monthly log is kept.')) return;
+  planState = null; savePlan(); renderProjection();
+}
+
+// where you ACTUALLY are: latest snapshot debt, else current total
+function actualDebtNow() {
+  const snap = (S.log || []).map(r => ({ abs: parseMonthAbs(r.month), debt: parseNum(r.debt) }))
+    .filter(s => s.abs != null && s.debt > 0).sort((a, b) => b.abs - a.abs)[0];
+  if (snap) return { debt: snap.debt, abs: snap.abs, fromSnapshot: true };
+  return { debt: _calc.totalBalance || 0, abs: monthAbsNow(), fromSnapshot: false };
+}
+
+// compare actual position to the locked plan curve
+function planStatus() {
+  if (!planState || !planState.series?.length) return null;
+  const elapsed = Math.max(0, monthAbsNow() - planState.startAbs);
+  const series = planState.series;
+  const expected = series[Math.min(elapsed, series.length - 1)];
+  const act = actualDebtNow();
+  // find which month of the plan curve your actual debt corresponds to
+  let curveMonth = series.length - 1;
+  for (let m = 0; m < series.length; m++) { if (series[m] <= act.debt) { curveMonth = m; break; } }
+  const aheadBy = curveMonth - elapsed; // +ve = paid down faster than plan
+  let status = 'on-track';
+  if (aheadBy >= 2) status = 'ahead';
+  else if (aheadBy <= -2) status = 'behind';
+  return { elapsed, expected, actual: act, aheadBy, status };
+}
+
 // Normalize debts to PLN. Returns [{name, bal, rate, min, isMortgage}]
 function projDebts() {
   const cadRate = S.cadRate || 0;
@@ -1407,6 +1512,7 @@ function renderProjection() {
   if (!debts.length) {
     ['ms-consumer','ms-full','sim-consumer','sim-full','sim-saved'].forEach(id => document.getElementById(id).textContent = '—');
     document.getElementById('cmp-table').innerHTML = '<tr><td>Add debts to compare strategies.</td></tr>';
+    renderPlanStrip();
     drawChart(null);
     return;
   }
@@ -1435,7 +1541,51 @@ function renderProjection() {
   }
 
   renderComparison(debts, projState.extra);
+  renderPlanStrip();
   drawChart(sim);
+}
+
+function renderPlanStrip() {
+  const strip = document.getElementById('plan-strip');
+  const head  = document.getElementById('plan-head');
+  const sub   = document.getElementById('plan-sub');
+  const lockBtn = document.getElementById('plan-lock-btn');
+  const clearBtn = document.getElementById('plan-clear-btn');
+  const nudge = document.getElementById('plan-nudge');
+
+  const st = planStatus();
+  strip.className = 'plan-strip' + (st ? ' ' + st.status : '');
+
+  if (!st) {
+    head.textContent = 'No plan locked yet';
+    sub.textContent  = 'Set your overpayment in the simulator below, then lock it as your plan to track against each month.';
+    lockBtn.textContent = 'Lock this plan';
+    lockBtn.style.display = '';
+    clearBtn.style.display = 'none';
+    nudge.style.display = 'none';
+    return;
+  }
+
+  // headline status
+  const n = Math.abs(st.aheadBy);
+  let tag;
+  if (st.status === 'on-track') tag = `<span class="tag ok">on track</span>`;
+  else if (st.status === 'ahead') tag = `<span class="tag ahead">${n} month${n>1?'s':''} ahead</span>`;
+  else tag = `<span class="tag behind">${n} month${n>1?'s':''} behind</span>`;
+
+  const src = st.actual.fromSnapshot ? `last snapshot (${MONTHS[st.actual.abs%12]} ${Math.floor(st.actual.abs/12)})` : 'current balances';
+  head.innerHTML = `You're ${tag} on your plan`;
+  sub.textContent = `Plan locked ${planState.startLabel} at ${fmt(planState.startDebt)} · ${fmt(planState.extra)}/mo ${planState.strategy} · `
+    + `now ${fmt(st.actual.debt)} from ${src}, plan expected ${fmt(st.expected)}.`;
+
+  lockBtn.textContent = 'Re-lock to current';
+  lockBtn.style.display = '';
+  clearBtn.style.display = '';
+
+  // monthly nudge: a new calendar month has begun since the last snapshot
+  const lastSnapAbs = (S.log || []).map(r => parseMonthAbs(r.month)).filter(a => a != null).sort((a,b) => b-a)[0];
+  const due = lastSnapAbs == null || monthAbsNow() > lastSnapAbs;
+  nudge.style.display = due ? '' : 'none';
 }
 
 function renderComparison(debts, extra) {
@@ -1481,38 +1631,79 @@ function drawChart(sim) {
     return;
   }
 
-  // window selection
+  const drawGrid = (maxBal, endLabel) => {
+    ctx.strokeStyle = '#1C3550'; ctx.lineWidth = 1; ctx.fillStyle = '#6B8BAD'; ctx.font = '10px -apple-system, sans-serif';
+    for (let g = 0; g <= 4; g++) {
+      const v = maxBal * (1 - g / 4), y = padT + (plotH * g / 4);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(cssW - padR, y); ctx.stroke();
+      ctx.fillText(Math.round(v / 1000) + 'k', 6, y + 3);
+    }
+    if (endLabel) { ctx.fillStyle = '#6B8BAD'; ctx.fillText(endLabel, cssW - padR - 54, cssH - 8); }
+  };
+
+  // ─── Plan-anchored view: x-axis is months since plan was locked ───
+  if (planState && planState.series?.length) {
+    const elapsed = Math.max(0, monthAbsNow() - planState.startAbs);
+    const planSeries = planState.series;
+    const liveSeries = sim.series; // from now forward
+    const fullMax = Math.max(planSeries.length - 1, elapsed + liveSeries.length - 1);
+    let cutoff = fullMax;
+    if (projState.zoom === 'consumer') {
+      const cm = Math.max(planState.consumerMonth || 0, elapsed + (sim.consumerMonth || 0));
+      cutoff = Math.min(fullMax, (cm || 24) + 6);
+    }
+    const totalX = cutoff || 1;
+    const xAt = mo => padL + (Math.min(mo, totalX) / totalX) * plotW;
+    // snapshots since the plan started
+    const snaps = (S.log || []).map(r => ({ mo: parseMonthAbs(r.month) - planState.startAbs, debt: parseNum(r.debt) }))
+      .filter(s => s.mo >= 0 && s.mo <= cutoff && s.debt > 0);
+    const visPlan = planSeries.slice(0, cutoff + 1);
+    const maxBal = Math.max(...visPlan, ...liveSeries.slice(0, cutoff + 1), ...snaps.map(s => s.debt), 1);
+    const yAt = v => padT + plotH - (v / maxBal) * plotH;
+    drawGrid(maxBal, monthsToDate(cutoff));
+
+    // "now" divider
+    const nowX = xAt(elapsed);
+    ctx.strokeStyle = '#254567'; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(nowX, padT); ctx.lineTo(nowX, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#3A5878'; ctx.fillText('now', nowX + 3, padT + 10);
+
+    // locked plan (grey dashed)
+    ctx.beginPath();
+    visPlan.forEach((v, mo) => { const x = xAt(mo), y = yAt(v); mo ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.strokeStyle = '#6B8BAD'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+
+    // updated forecast from now (teal)
+    ctx.beginPath();
+    liveSeries.forEach((v, i) => { const mo = elapsed + i; if (mo > cutoff) return; const x = xAt(mo), y = yAt(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.strokeStyle = '#0FB8A0'; ctx.lineWidth = 2; ctx.stroke();
+
+    // actual snapshots (amber)
+    snaps.forEach(s => { ctx.beginPath(); ctx.arc(xAt(s.mo), yAt(s.debt), 3.5, 0, Math.PI * 2); ctx.fillStyle = '#F59E0B'; ctx.fill(); });
+    return;
+  }
+
+  // ─── No plan yet: simple past-dots + forward projection ───
   let series = sim.series;
   let cutoff = series.length - 1;
   if (projState.zoom === 'consumer' && sim.consumerMonth != null) {
     cutoff = Math.min(series.length - 1, sim.consumerMonth + 6);
     series = series.slice(0, cutoff + 1);
   }
-
-  // past snapshots (chronological): S.log most-recent-first
   const past = (S.log || []).map(r => parseNum(r.debt)).filter(v => v > 0).reverse();
   const maxBal = Math.max(...series, ...past, 1);
   const totalX = past.length + series.length - 1 || 1;
-
-  const xAt = i => padL + (i / totalX) * plotW;           // i in [0, totalX]
+  const xAt = i => padL + (i / totalX) * plotW;
   const yAt = v => padT + plotH - (v / maxBal) * plotH;
+  drawGrid(maxBal, monthsToDate(cutoff));
 
-  // grid + y labels
-  ctx.strokeStyle = '#1C3550'; ctx.lineWidth = 1; ctx.fillStyle = '#6B8BAD'; ctx.font = '10px -apple-system, sans-serif';
-  for (let g = 0; g <= 4; g++) {
-    const v = maxBal * (1 - g / 4), y = padT + (plotH * g / 4);
-    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(cssW - padR, y); ctx.stroke();
-    ctx.fillText(Math.round(v / 1000) + 'k', 6, y + 3);
-  }
-
-  // "now" divider
   const nowX = xAt(past.length);
   ctx.strokeStyle = '#254567'; ctx.setLineDash([3, 3]);
   ctx.beginPath(); ctx.moveTo(nowX, padT); ctx.lineTo(nowX, padT + plotH); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = '#3A5878'; ctx.fillText('now', nowX + 3, padT + 10);
 
-  // projected curve + fill
   ctx.beginPath();
   series.forEach((v, i) => { const x = xAt(past.length + i), y = yAt(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
   ctx.strokeStyle = '#0FB8A0'; ctx.lineWidth = 2; ctx.stroke();
@@ -1520,15 +1711,7 @@ function drawChart(sim) {
   ctx.lineTo(nowX, padT + plotH); ctx.closePath();
   ctx.fillStyle = 'rgba(15,184,160,0.10)'; ctx.fill();
 
-  // past snapshot dots
-  past.forEach((v, i) => {
-    ctx.beginPath(); ctx.arc(xAt(i), yAt(v), 3, 0, Math.PI * 2);
-    ctx.fillStyle = '#F59E0B'; ctx.fill();
-  });
-
-  // x-axis end label
-  ctx.fillStyle = '#6B8BAD';
-  ctx.fillText(monthsToDate(cutoff), cssW - padR - 54, cssH - 8);
+  past.forEach((v, i) => { ctx.beginPath(); ctx.arc(xAt(i), yAt(v), 3, 0, Math.PI * 2); ctx.fillStyle = '#F59E0B'; ctx.fill(); });
 }
 
 // ─── Projection UI handlers ─────────────────────────────────────────────────
@@ -1982,6 +2165,7 @@ function renderAll() {
   renderLog();
   restoreInputs();
   loadProjState();
+  loadPlan();
   document.getElementById('proj-zoom').textContent = 'Zoom: ' + (projState.zoom === 'consumer' ? 'consumer window' : 'full horizon');
   recalc();
   switchProjTab(projState.tab || 'simulator');
