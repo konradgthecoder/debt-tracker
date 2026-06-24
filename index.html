@@ -770,7 +770,10 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
           </div>
           <div id="memory-panel" style="display:none; margin-top:0.5rem;">
             <textarea id="memory-notes" class="chat-memory-area" placeholder="e.g. I actually spend ~500 PLN on dining out. My income includes a quarterly bonus of ~5000 PLN. Ignore student loans for now." oninput="saveMemoryNotes(this.value)" rows="3"></textarea>
-            <p class="chat-memory-hint" style="margin-top:0.3rem">Injected into every analysis. Edit freely — Claude reads this on each call.</p>
+            <p class="chat-memory-hint" style="margin-top:0.3rem">
+              Nothing to submit — this saves automatically <span id="memory-saved" style="color:var(--green);opacity:0;transition:opacity 0.2s">✓ saved</span><br>
+              Claude reads it on every Analyze and every chat message.
+            </p>
           </div>
         </div>
         <!-- Suggested follow-ups -->
@@ -2208,9 +2211,16 @@ function saveChatHistory() {
 function loadChatHistory() {
   try { chatHistory = JSON.parse(localStorage.getItem(CHAT_STORAGE) || '[]'); } catch { chatHistory = []; }
 }
+let _memSavedTimer;
 function saveMemoryNotes(val) {
   memoryNotes = val;
   localStorage.setItem(MEMORY_STORAGE, val);
+  const tag = document.getElementById('memory-saved');
+  if (tag) {
+    tag.style.opacity = '1';
+    clearTimeout(_memSavedTimer);
+    _memSavedTimer = setTimeout(() => { tag.style.opacity = '0'; }, 1200);
+  }
 }
 function loadMemoryNotes() {
   memoryNotes = localStorage.getItem(MEMORY_STORAGE) || '';
