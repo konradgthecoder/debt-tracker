@@ -83,7 +83,9 @@ body {
 .toast.err  { border-color: rgba(244,86,106,0.4); color: var(--coral); }
 
 /* ─── Layout ─── */
-main { padding: 1.5rem 1.5rem 4rem; display: grid; gap: 2rem; }
+main { padding: 1.5rem 1.5rem 4rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; }
+main > section { min-width: 0; }
+.table-wrap { max-width: 100%; }
 
 .section-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.9rem; }
 .section-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); white-space: nowrap; }
