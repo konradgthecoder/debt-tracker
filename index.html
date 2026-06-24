@@ -281,10 +281,12 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .insights-output p { margin: 0.4rem 0; }
 .insights-output ol { padding-left: 1.4rem; margin: 0.3rem 0; }
 .insights-output ol li { margin: 0.15rem 0; }
-.ins-table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.84rem; }
-.ins-table th, .ins-table td { padding: 0.3rem 0.9rem; border: 1px solid var(--border2); text-align: left; }
-.ins-table th { background: var(--card2); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.ins-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; margin: 0.5rem 0; }
+.ins-table { border-collapse: collapse; font-size: 0.84rem; }
+.ins-table th, .ins-table td { padding: 0.35rem 0.8rem; border: 1px solid var(--border2); text-align: left; vertical-align: top; min-width: 90px; max-width: 280px; }
+.ins-table th { background: var(--card2); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
 .ins-table td { font-variant-numeric: tabular-nums; }
+.ins-table td:first-child, .ins-table th:first-child { min-width: 120px; }
 
 /* ─── Chat ─── */
 .chat-section { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -468,6 +470,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .modal-btns .btn { flex: 1; min-width: 120px; text-align: center; padding: 0.55rem 0.75rem; }
 .modal-hint { font-size: 0.74rem; color: var(--dim); }
 .modal-divider { height: 1px; background: var(--border); }
+.sync-status { text-transform: none; letter-spacing: 0; font-weight: 600; margin-left: 0.4rem; }
+.sync-status[data-kind="ok"] { color: var(--green); }
+.sync-status[data-kind="busy"] { color: var(--amber); }
+.sync-status[data-kind="err"] { color: var(--coral); }
+.rib-sync { font-size: 0.74rem; color: var(--muted); cursor: pointer; align-self: center; white-space: nowrap; }
+.rib-sync[data-kind="ok"] { color: var(--green); }
+.rib-sync[data-kind="busy"] { color: var(--amber); }
+.rib-sync[data-kind="err"] { color: var(--coral); }
 </style>
 
 <!-- Toast -->
@@ -477,9 +487,29 @@ html, body { max-width: 100%; overflow-x: hidden; }
 <div class="modal-overlay" id="data-modal" onclick="if(event.target===this)closeDataModal()">
   <div class="modal">
     <div class="modal-head">
-      <span class="modal-title">Backup &amp; restore data</span>
+      <span class="modal-title">Sync, backup &amp; restore</span>
       <button class="modal-x" onclick="closeDataModal()" aria-label="Close">✕</button>
     </div>
+
+    <!-- Cloud sync -->
+    <div class="modal-sec">
+      <span class="modal-sec-label">☁ Cloud sync <span id="sync-status" class="sync-status"></span></span>
+      <div id="sync-off" style="flex-direction:column;gap:0.6rem;display:flex">
+        <input id="sync-token" type="password" class="modal-data" style="min-height:0;font-size:13px" placeholder="GitHub fine-grained token (ghp_… / github_pat_…)">
+        <input id="sync-repo" type="text" class="modal-data" style="min-height:0;font-size:13px" placeholder="owner/repo">
+        <button class="btn btn-primary" onclick="connectSync()">Connect sync</button>
+        <span class="modal-hint">Auto-saves your data to a private repo so all your devices stay in sync. The token is stored only on this device. Setup steps are in DEPLOY/SYNC notes.</span>
+      </div>
+      <div id="sync-on" style="flex-direction:column;gap:0.6rem;display:none">
+        <span class="modal-hint">Synced to <strong id="sync-on-repo"></strong>. Changes save automatically; opening on another device pulls the latest.</span>
+        <div class="modal-btns">
+          <button class="btn btn-primary" onclick="syncPull(true)">↓ Pull latest now</button>
+          <button class="btn btn-ghost" onclick="disconnectSync()">Disconnect</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-divider"></div>
 
     <div class="modal-sec">
       <span class="modal-sec-label">Export — copy this, or save the file</span>
@@ -510,7 +540,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
   <div class="ribbon-left">
     <span class="ribbon-title">Debt Tracker — Konrad</span>
     <div class="ribbon-actions">
-      <button class="btn btn-primary" onclick="openDataModal()">⇅ Backup / restore</button>
+      <button class="btn btn-primary" onclick="openDataModal()">⇅ Sync / backup</button>
+      <span id="rib-sync" class="rib-sync" onclick="openDataModal()"></span>
       <input id="import-input" type="file" accept="application/json,.json,.txt" style="display:none" onchange="importJSON(this)">
     </div>
   </div>
@@ -983,9 +1014,11 @@ let S = loadState();
 // live calc values for snapshot button
 let _calc = { totalBalance: 0, totalMin: 0, free: null, runway: null };
 
-function persist() {
+function persist(skipSync) {
+  S.updatedAt = Date.now();
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
   catch (e) { toast('⚠ Storage full — export your data!', 'err'); }
+  if (!skipSync) scheduleSyncPush();
 }
 
 // ─── Export / Import ───────────────────────────────────────────────────────
@@ -995,6 +1028,7 @@ function openDataModal() {
   document.getElementById('export-data').value = JSON.stringify(S, null, 2);
   document.getElementById('import-data').value = '';
   if (!navigator.share) document.getElementById('share-btn').textContent = '⇪ Download file';
+  updateSyncUI();
   document.getElementById('data-modal').classList.add('open');
 }
 function closeDataModal() { document.getElementById('data-modal').classList.remove('open'); }
@@ -1057,6 +1091,179 @@ function importJSON(input) {
     input.value = '';
   };
   reader.readAsText(file);
+}
+
+// ─── Cloud sync (private GitHub repo via fine-grained token) ────────────────
+const SYNC_TOKEN_KEY = 'gh_sync_token';
+const SYNC_REPO_KEY  = 'gh_sync_repo';
+const DEFAULT_SYNC_REPO = 'konradgthecoder/debt-tracker-data';
+const SYNC_PATH = 'data.json';
+let syncSha = null;
+let _syncPushTimer = null;
+let _syncing = false;
+
+function syncToken() { return localStorage.getItem(SYNC_TOKEN_KEY) || ''; }
+function syncRepo()  { return localStorage.getItem(SYNC_REPO_KEY) || DEFAULT_SYNC_REPO; }
+function syncEnabled() { return !!syncToken(); }
+
+// UTF-8 safe base64
+function b64encode(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64decode(b64) { return decodeURIComponent(escape(atob(b64.replace(/\n/g, '')))); }
+
+function setSyncStatus(text, kind) {
+  const el = document.getElementById('sync-status');
+  if (el) { el.textContent = text; el.dataset.kind = kind || ''; }
+  const rib = document.getElementById('rib-sync');
+  if (rib) { rib.textContent = text ? '☁ ' + text : ''; rib.dataset.kind = kind || ''; }
+}
+
+async function ghContents(method, body) {
+  const url = `https://api.github.com/repos/${syncRepo()}/contents/${SYNC_PATH}`;
+  const opts = {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + syncToken(),
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  return fetch(method === 'GET' ? url + '?ref=HEAD&t=' + Date.now() : url, opts);
+}
+
+// Pull remote; adopt it only if it's newer than local (last-write-wins by updatedAt)
+async function syncPull(force) {
+  if (!syncEnabled()) return;
+  setSyncStatus('syncing…', 'busy');
+  try {
+    const res = await ghContents('GET');
+    if (res.status === 404) { syncSha = null; setSyncStatus('connected (empty)', 'ok'); return; }
+    if (res.status === 401 || res.status === 403) { setSyncStatus('auth failed', 'err'); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    syncSha = data.sha;
+    const remote = JSON.parse(b64decode(data.content));
+    const localT = S.updatedAt || 0, remoteT = remote.updatedAt || 0;
+    if (force || remoteT > localT) {
+      S = { ...freshState(), ...remote };
+      persist(true);            // save locally without re-pushing
+      renderAll();
+      setSyncStatus('synced ✓', 'ok');
+    } else if (localT > remoteT) {
+      setSyncStatus('local newer — pushing…', 'busy');
+      await syncPush(true);
+    } else {
+      setSyncStatus('synced ✓', 'ok');
+    }
+  } catch (e) {
+    setSyncStatus('offline', 'err');
+  }
+}
+
+function scheduleSyncPush() {
+  if (!syncEnabled()) return;
+  setSyncStatus('saving…', 'busy');
+  clearTimeout(_syncPushTimer);
+  _syncPushTimer = setTimeout(() => syncPush(), 1500);
+}
+
+async function syncPush(immediate) {
+  if (!syncEnabled() || _syncing) return;
+  _syncing = true;
+  setSyncStatus('saving…', 'busy');
+  try {
+    const body = {
+      message: `update ${new Date().toISOString()}`,
+      content: b64encode(JSON.stringify(S, null, 2)),
+    };
+    if (syncSha) body.sha = syncSha;
+    let res = await ghContents('PUT', body);
+    if (res.status === 409 || res.status === 422) {
+      // sha stale — another device wrote. Refresh sha, then last-write-wins.
+      const g = await ghContents('GET');
+      if (g.ok) {
+        const d = await g.json();
+        syncSha = d.sha;
+        const remote = JSON.parse(b64decode(d.content));
+        if ((remote.updatedAt || 0) > (S.updatedAt || 0)) {
+          S = { ...freshState(), ...remote }; persist(true); renderAll();
+          setSyncStatus('synced ✓ (remote was newer)', 'ok'); _syncing = false; return;
+        }
+        body.sha = syncSha;
+        res = await ghContents('PUT', body);
+      }
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const out = await res.json();
+    syncSha = out.content.sha;
+    setSyncStatus('synced ✓', 'ok');
+  } catch (e) {
+    setSyncStatus('save failed — will retry', 'err');
+    clearTimeout(_syncPushTimer);
+    _syncPushTimer = setTimeout(() => syncPush(), 8000);
+  } finally {
+    _syncing = false;
+  }
+}
+
+async function connectSync() {
+  const token = document.getElementById('sync-token').value.trim();
+  const repo  = document.getElementById('sync-repo').value.trim() || DEFAULT_SYNC_REPO;
+  if (!token) { toast('Paste a GitHub token first', 'err'); return; }
+  localStorage.setItem(SYNC_TOKEN_KEY, token);
+  localStorage.setItem(SYNC_REPO_KEY, repo);
+  setSyncStatus('connecting…', 'busy');
+  // validate token + repo
+  const res = await ghContents('GET').catch(() => null);
+  if (!res || res.status === 401 || res.status === 403) {
+    setSyncStatus('auth failed', 'err');
+    toast('Token rejected — check scope & repo', 'err');
+    return;
+  }
+  if (res.status === 404) {
+    // file not there yet — first push seeds it from this device
+    syncSha = null;
+    await syncPush(true);
+  } else if (res.ok) {
+    const d = await res.json();
+    syncSha = d.sha;
+    const remote = JSON.parse(b64decode(d.content));
+    // first connect on a device: if remote has data, ask before overwriting local
+    const remoteHas = (remote.debts || []).length;
+    const localHas = (S.debts || []).length;
+    if (remoteHas && localHas && (remote.updatedAt || 0) !== (S.updatedAt || 0)) {
+      const useRemote = confirm(`This account already has synced data (${remoteHas} debts). Load it onto THIS device?\n\nOK = use synced data · Cancel = keep this device's data and push it up.`);
+      if (useRemote) { S = { ...freshState(), ...remote }; persist(true); renderAll(); }
+      else { await syncPush(true); }
+    } else if (remoteHas) {
+      S = { ...freshState(), ...remote }; persist(true); renderAll();
+    } else {
+      await syncPush(true);
+    }
+  }
+  updateSyncUI();
+  setSyncStatus('synced ✓', 'ok');
+  toast('Cloud sync on ✓', 'ok');
+}
+
+function disconnectSync() {
+  if (!confirm('Turn off sync on this device? Your data stays here and in the cloud.')) return;
+  localStorage.removeItem(SYNC_TOKEN_KEY);
+  syncSha = null;
+  updateSyncUI();
+  setSyncStatus('', '');
+  toast('Sync disconnected', 'ok');
+}
+
+function updateSyncUI() {
+  const on = syncEnabled();
+  const offBox = document.getElementById('sync-off');
+  const onBox  = document.getElementById('sync-on');
+  if (offBox) offBox.style.display = on ? 'none' : 'flex';
+  if (onBox)  onBox.style.display  = on ? 'flex' : 'none';
+  const repoEl = document.getElementById('sync-on-repo');
+  if (repoEl) repoEl.textContent = syncRepo();
+  document.getElementById('sync-repo').value = syncRepo();
 }
 
 // ─── Debt table ────────────────────────────────────────────────────────────
@@ -2265,13 +2472,13 @@ function renderMarkdown(md) {
   };
   const flushTable = () => {
     if (!tableRows.length) return;
-    html += '<table class="ins-table"><tbody>';
+    html += '<div class="ins-table-wrap"><table class="ins-table"><tbody>';
     tableRows.forEach((row, i) => {
       if (i === 1 && row.every(c => /^-+$/.test(c.trim()))) return; // separator row
       const tag = i === 0 ? 'th' : 'td';
       html += '<tr>' + row.map(c => `<${tag}>${inline(c.trim())}</${tag}>`).join('') + '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     tableRows = []; inTable = false;
   };
 
@@ -2687,4 +2894,12 @@ window.addEventListener('resize', () => {
 });
 
 renderAll();
+
+// initial cloud-sync state + pull latest once on load
+updateSyncUI();
+if (syncEnabled()) syncPull();
+// re-pull when returning to the tab (e.g. switching back from the other device)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && syncEnabled() && !_syncing) syncPull();
+});
 </script>
