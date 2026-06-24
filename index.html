@@ -190,6 +190,13 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .snap-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.3rem; }
 .snap-card.full { grid-column: 1 / -1; }
 .snap-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.6rem; }
+.alloc-wrap { display: flex; align-items: center; gap: 1.1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.alloc-wrap canvas { flex: 0 0 auto; }
+.alloc-legend { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 150px; }
+.alloc-leg-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; }
+.alloc-leg-row .sw { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+.alloc-leg-row .nm { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alloc-leg-row .pc { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
 .snap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
 .snap-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: 0.9rem; }
 .snap-row .key { color: var(--muted); }
@@ -535,6 +542,10 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
             <span class="snap-total-key">💰 Free cash</span>
             <span class="snap-total-val" id="s-free">—</span>
           </div>
+        </div>
+        <div class="alloc-wrap" id="alloc-wrap" style="display:none">
+          <canvas id="alloc-donut" width="150" height="150"></canvas>
+          <div class="alloc-legend" id="alloc-legend"></div>
         </div>
       </div>
 
@@ -1367,6 +1378,79 @@ function recalc() {
   } else { ribFree.textContent = '—'; ribFree.className = 'val neutral'; }
 
   renderProjection();
+  renderAllocation();
+}
+
+// ─── Income allocation donut ────────────────────────────────────────────────
+function renderAllocation() {
+  const wrap = document.getElementById('alloc-wrap');
+  const canvas = document.getElementById('alloc-donut');
+  const legend = document.getElementById('alloc-legend');
+  if (!canvas) return;
+
+  const cadRate = S.cadRate || 0;
+  const catMin = { interest: 0, zero: 0, mortgage: 0, foreign: 0 };
+  S.debts.forEach(d => {
+    const minRaw = parseFloat(d.min) || 0;
+    const min = d.type === 'foreign' ? minRaw * cadRate : minRaw;
+    if (catMin[d.type] != null) catMin[d.type] += min;
+  });
+  const costs = (S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+  const free = _calc.free != null ? Math.max(0, _calc.free) : null;
+
+  const segs = [
+    { label: 'Interest loans', value: catMin.interest, color: '#F4566A' },
+    { label: '0% instalments', value: catMin.zero,     color: '#5B8DEF' },
+    { label: 'Mortgage',       value: catMin.mortgage, color: '#F59E0B' },
+    { label: 'Foreign debt',   value: catMin.foreign,  color: '#A882FF' },
+    { label: 'Fixed costs',    value: costs,           color: '#00B8D4' },
+  ];
+  if (free != null) segs.push({ label: 'Free cash', value: free, color: '#22C99A' });
+
+  const shown = segs.filter(s => s.value > 0.005);
+  const total = shown.reduce((s, x) => s + x.value, 0);
+  if (!shown.length || total <= 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+
+  // draw donut
+  const dpr = window.devicePixelRatio || 1;
+  const size = 150;
+  canvas.width = size * dpr; canvas.height = size * dpr;
+  canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+  const cx = size / 2, cy = size / 2, rOuter = size / 2 - 2, rInner = rOuter * 0.62;
+
+  let a0 = -Math.PI / 2;
+  shown.forEach(s => {
+    const a1 = a0 + (s.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, rOuter, a0, a1);
+    ctx.closePath();
+    ctx.fillStyle = s.color; ctx.fill();
+    a0 = a1;
+  });
+  // punch the hole
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath(); ctx.arc(cx, cy, rInner, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+
+  // center label
+  ctx.fillStyle = '#E8F0F8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '700 15px -apple-system, sans-serif';
+  ctx.fillText(Math.round(total / 1000) + 'k', cx, cy - 6);
+  ctx.fillStyle = '#6B8BAD'; ctx.font = '9px -apple-system, sans-serif';
+  ctx.fillText(free != null ? 'income' : 'outflow', cx, cy + 9);
+
+  // legend
+  legend.innerHTML = shown.map(s => `
+    <div class="alloc-leg-row">
+      <span class="sw" style="background:${s.color}"></span>
+      <span class="nm">${s.label}</span>
+      <span class="pc">${Math.round((s.value / total) * 100)}%</span>
+    </div>`).join('');
 }
 
 // ─── Payoff projection engine ──────────────────────────────────────────────
