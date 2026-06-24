@@ -197,6 +197,27 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .alloc-leg-row .sw { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
 .alloc-leg-row .nm { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alloc-leg-row .pc { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+.alloc-leg-row { cursor: default; padding: 1px 4px; border-radius: 4px; transition: background 0.12s; }
+.alloc-leg-row.hot { background: var(--card2); }
+.alloc-leg-row.hot .nm { color: var(--text); }
+.alloc-leg-row.dim { opacity: 0.4; }
+.snap-label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; gap: 0.5rem; }
+.viz-toggle { display: flex; gap: 0.2rem; }
+.viz-btn {
+  font-size: 0.68rem; padding: 0.18rem 0.5rem; border-radius: 5px; cursor: pointer; font-family: inherit;
+  background: transparent; border: 1px solid var(--border2); color: var(--muted); transition: all 0.12s;
+}
+.viz-btn:hover { color: var(--text); }
+.viz-btn.active { background: rgba(15,184,160,0.15); border-color: rgba(15,184,160,0.4); color: var(--teal); }
+.alloc-insights { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.ratio { display: flex; flex-direction: column; gap: 0.3rem; }
+.ratio-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.8rem; }
+.ratio-head .rn { color: var(--muted); }
+.ratio-head .rv { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ratio-bar-bg { position: relative; height: 8px; background: var(--card2); border-radius: 5px; overflow: hidden; }
+.ratio-bar { height: 100%; border-radius: 5px; transition: width 0.3s; }
+.ratio-bench { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); opacity: 0.5; }
+.ratio-note { font-size: 0.7rem; color: var(--dim); }
 .snap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
 .snap-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: 0.9rem; }
 .snap-row .key { color: var(--muted); }
@@ -523,7 +544,13 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
     <div class="snap-grid">
 
       <div class="snap-card">
-        <div class="snap-label">Income &amp; outgoings</div>
+        <div class="snap-label-row">
+          <span class="snap-label" style="margin-bottom:0">Income &amp; outgoings</span>
+          <div class="viz-toggle" id="viz-toggle" style="display:none">
+            <button class="viz-btn" id="viz-1" onclick="setSnapViz(1)" title="Bigger chart">◍ Chart</button>
+            <button class="viz-btn" id="viz-2" onclick="setSnapViz(2)" title="Health ratios">▤ Insights</button>
+          </div>
+        </div>
         <div class="snap-rows">
           <div class="snap-row">
             <span class="key">Monthly net income</span>
@@ -547,6 +574,7 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
           <canvas id="alloc-donut" width="150" height="150"></canvas>
           <div class="alloc-legend" id="alloc-legend"></div>
         </div>
+        <div class="alloc-insights" id="alloc-insights" style="display:none"></div>
       </div>
 
       <div class="snap-card">
@@ -697,7 +725,8 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
       <div class="proj-panel" id="panel-chart">
         <div class="proj-chart-head">
           <div class="proj-legend">
-            <span><span class="dot" style="background:var(--teal)"></span>Forecast from today</span>
+            <span><span class="dot" style="background:var(--teal)"></span>Debt forecast</span>
+            <span><span class="dot" style="background:#34D399"></span>Savings</span>
             <span><span class="dot" style="background:var(--muted)"></span>Locked plan</span>
             <span><span class="dot" style="background:var(--amber)"></span>Your snapshots</span>
           </div>
@@ -1382,10 +1411,26 @@ function recalc() {
 }
 
 // ─── Income allocation donut ────────────────────────────────────────────────
+const SNAPVIZ_STORAGE = 'debt_tracker_snapviz';
+let snapViz = 2;            // 1 = bigger chart, 2 = chart + health ratios
+let _alloc = null;          // cached geometry + segments for hover
+let _allocHover = -1;
+
+function loadSnapViz() {
+  const v = parseInt(localStorage.getItem(SNAPVIZ_STORAGE), 10);
+  snapViz = (v === 1 || v === 2) ? v : 2;
+}
+function setSnapViz(v) {
+  snapViz = v; localStorage.setItem(SNAPVIZ_STORAGE, String(v));
+  renderAllocation();
+}
+
 function renderAllocation() {
   const wrap = document.getElementById('alloc-wrap');
   const canvas = document.getElementById('alloc-donut');
   const legend = document.getElementById('alloc-legend');
+  const insights = document.getElementById('alloc-insights');
+  const toggle = document.getElementById('viz-toggle');
   if (!canvas) return;
 
   const cadRate = S.cadRate || 0;
@@ -1398,7 +1443,7 @@ function renderAllocation() {
   const costs = (S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
   const free = _calc.free != null ? Math.max(0, _calc.free) : null;
 
-  const segs = [
+  let segs = [
     { label: 'Interest loans', value: catMin.interest, color: '#F4566A' },
     { label: '0% instalments', value: catMin.zero,     color: '#5B8DEF' },
     { label: 'Mortgage',       value: catMin.mortgage, color: '#F59E0B' },
@@ -1407,50 +1452,133 @@ function renderAllocation() {
   ];
   if (free != null) segs.push({ label: 'Free cash', value: free, color: '#22C99A' });
 
-  const shown = segs.filter(s => s.value > 0.005);
+  // sort largest-first so the donut reads cleanly
+  const shown = segs.filter(s => s.value > 0.005).sort((a, b) => b.value - a.value);
   const total = shown.reduce((s, x) => s + x.value, 0);
-  if (!shown.length || total <= 0) { wrap.style.display = 'none'; return; }
+  if (!shown.length || total <= 0) { wrap.style.display = 'none'; insights.style.display = 'none'; toggle.style.display = 'none'; return; }
+
+  toggle.style.display = 'flex';
+  document.getElementById('viz-1').classList.toggle('active', snapViz === 1);
+  document.getElementById('viz-2').classList.toggle('active', snapViz === 2);
   wrap.style.display = 'flex';
 
-  // draw donut
+  // build segment geometry
+  const size = snapViz === 1 ? 200 : 150;
+  const cx = size / 2, cy = size / 2, rOuter = size / 2 - 2, rInner = rOuter * 0.62;
+  let a0 = -Math.PI / 2;
+  shown.forEach(s => { s.a0 = a0; s.a1 = a0 + (s.value / total) * Math.PI * 2; a0 = s.a1; });
+  _alloc = { canvas, shown, total, free, cx, cy, rOuter, rInner, size };
+
+  drawAllocDonut(-1);
+
+  // legend
+  legend.innerHTML = shown.map((s, i) => `
+    <div class="alloc-leg-row" data-idx="${i}" onmouseenter="allocHover(${i})" onmouseleave="allocHover(-1)">
+      <span class="sw" style="background:${s.color}"></span>
+      <span class="nm">${s.label}</span>
+      <span class="pc">${Math.round((s.value / total) * 100)}%</span>
+    </div>`).join('');
+
+  // hover wiring (once)
+  if (!canvas._wired) {
+    canvas.addEventListener('mousemove', allocCanvasMove);
+    canvas.addEventListener('mouseleave', () => allocHover(-1));
+    canvas._wired = true;
+  }
+
+  // Option 2: financial-health ratio bars
+  if (snapViz === 2 && S.income > 0) {
+    insights.style.display = 'flex';
+    const income = S.income;
+    const debtPay = _calc.totalMin || 0;
+    const ratios = [
+      { name: 'Debt-to-income', val: debtPay / income, bench: 0.36, color: '#F4566A',
+        note: 'Lenders flag above 36%. Your monthly debt payments vs income.' },
+      { name: 'Fixed costs',    val: costs / income,    bench: 0.50, color: '#00B8D4',
+        note: 'Essentials as a share of income. Lower leaves more to deploy.' },
+      { name: 'Free-cash rate', val: (free || 0) / income, bench: 0.20, color: '#22C99A',
+        note: 'What’s left to save or overpay. Aim for 20%+.' },
+    ];
+    insights.innerHTML = ratios.map(r => {
+      const pct = Math.max(0, Math.min(100, r.val * 100));
+      const benchPct = Math.min(100, r.bench * 100);
+      const good = r.name === 'Free-cash rate' ? r.val >= r.bench : r.val <= r.bench;
+      return `
+        <div class="ratio">
+          <div class="ratio-head"><span class="rn">${r.name}</span>
+            <span class="rv" style="color:${good ? 'var(--green)' : 'var(--amber)'}">${Math.round(r.val * 100)}%</span></div>
+          <div class="ratio-bar-bg">
+            <div class="ratio-bar" style="width:${pct}%;background:${r.color}"></div>
+            <div class="ratio-bench" style="left:${benchPct}%" title="benchmark ${Math.round(r.bench*100)}%"></div>
+          </div>
+          <div class="ratio-note">${r.note} <span style="color:var(--muted)">Benchmark ${Math.round(r.bench*100)}%.</span></div>
+        </div>`;
+    }).join('');
+  } else {
+    insights.style.display = 'none';
+  }
+}
+
+function drawAllocDonut(hover) {
+  if (!_alloc) return;
+  const { canvas, shown, total, free, cx, cy, rOuter, rInner, size } = _alloc;
   const dpr = window.devicePixelRatio || 1;
-  const size = 150;
   canvas.width = size * dpr; canvas.height = size * dpr;
   canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
-  const cx = size / 2, cy = size / 2, rOuter = size / 2 - 2, rInner = rOuter * 0.62;
 
-  let a0 = -Math.PI / 2;
-  shown.forEach(s => {
-    const a1 = a0 + (s.value / total) * Math.PI * 2;
+  shown.forEach((s, i) => {
+    const grow = i === hover ? 4 : 0;
+    ctx.globalAlpha = (hover >= 0 && i !== hover) ? 0.35 : 1;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, rOuter, a0, a1);
+    ctx.arc(cx, cy, rOuter + grow, s.a0, s.a1);
     ctx.closePath();
     ctx.fillStyle = s.color; ctx.fill();
-    a0 = a1;
   });
-  // punch the hole
+  ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'destination-out';
   ctx.beginPath(); ctx.arc(cx, cy, rInner, 0, Math.PI * 2); ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
 
-  // center label
-  ctx.fillStyle = '#E8F0F8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = '700 15px -apple-system, sans-serif';
-  ctx.fillText(Math.round(total / 1000) + 'k', cx, cy - 6);
-  ctx.fillStyle = '#6B8BAD'; ctx.font = '9px -apple-system, sans-serif';
-  ctx.fillText(free != null ? 'income' : 'outflow', cx, cy + 9);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (hover >= 0) {
+    const s = shown[hover];
+    ctx.fillStyle = s.color; ctx.font = `700 ${size > 170 ? 18 : 15}px -apple-system, sans-serif`;
+    ctx.fillText(Math.round((s.value / total) * 100) + '%', cx, cy - 7);
+    ctx.fillStyle = '#6B8BAD'; ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillText(fmt(s.value).replace(' PLN', ''), cx, cy + 9);
+  } else {
+    ctx.fillStyle = '#E8F0F8'; ctx.font = `700 ${size > 170 ? 19 : 15}px -apple-system, sans-serif`;
+    ctx.fillText(Math.round(total / 1000) + 'k', cx, cy - 6);
+    ctx.fillStyle = '#6B8BAD'; ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillText(free != null ? 'income' : 'outflow', cx, cy + 9);
+  }
+}
 
-  // legend
-  legend.innerHTML = shown.map(s => `
-    <div class="alloc-leg-row">
-      <span class="sw" style="background:${s.color}"></span>
-      <span class="nm">${s.label}</span>
-      <span class="pc">${Math.round((s.value / total) * 100)}%</span>
-    </div>`).join('');
+function allocHover(i) {
+  if (i === _allocHover) return;
+  _allocHover = i;
+  drawAllocDonut(i);
+  document.querySelectorAll('.alloc-leg-row').forEach(row => {
+    const idx = +row.dataset.idx;
+    row.classList.toggle('hot', idx === i);
+    row.classList.toggle('dim', i >= 0 && idx !== i);
+  });
+}
+
+function allocCanvasMove(e) {
+  if (!_alloc) return;
+  const rect = _alloc.canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left - _alloc.cx, y = e.clientY - rect.top - _alloc.cy;
+  const dist = Math.hypot(x, y);
+  if (dist < _alloc.rInner || dist > _alloc.rOuter + 5) { allocHover(-1); return; }
+  let ang = Math.atan2(y, x);
+  if (ang < -Math.PI / 2) ang += Math.PI * 2; // normalize to start at -PI/2
+  const idx = _alloc.shown.findIndex(s => ang >= s.a0 && ang < s.a1);
+  allocHover(idx);
 }
 
 // ─── Payoff projection engine ──────────────────────────────────────────────
@@ -1571,6 +1699,7 @@ function simulate(debts, extra, strategy, opts) {
   const order = orderDebts(debts, strategy);
   let state = order.map(d => ({ ...d }));
   const start = state.reduce((s, d) => s + d.bal, 0);
+  const startMin = state.reduce((s, d) => s + d.min, 0); // total monthly capacity once freed
   const series = [start];
   let totalInterest = 0, consumerMonth = null, fullyMonth = null;
   const MAX = 1200;
@@ -1626,6 +1755,22 @@ function simulate(debts, extra, strategy, opts) {
     // divergence guard: a positive-rate debt with too small a payment grows without bound
     if (tot > start * 1.5 && m > 12) { fullyMonth = null; break; }
   }
+
+  // Post-payoff: once debt is cleared, the whole monthly capacity (freed minimums
+  // + extra) pours into savings until the emergency fund is full.
+  if (opts && fullyMonth != null && fundFullMonth === null && savings < target - 0.005) {
+    const capacity = Math.max(startMin + extra, 1);
+    let m = fullyMonth;
+    while (savings < target - 0.005 && m < MAX) {
+      m++;
+      savings += capacity;
+      if (savings > target) savings = target;
+      series.push(0);
+      savingsSeries.push(savings);
+      if (savings >= target - 0.005) { fundFullMonth = m; break; }
+    }
+  }
+
   return { series, consumerMonth, fullyMonth, totalInterest, fundFullMonth, savingsSeries, months: series.length - 1 };
 }
 
@@ -1704,8 +1849,13 @@ function renderProjection() {
   const fundEl = document.getElementById('sim-fund');
   if (!opts) fundEl.textContent = 'set target';
   else if (sim.fundFullMonth === 0) fundEl.textContent = 'already met';
-  else if (sim.fundFullMonth != null) fundEl.textContent = monthsToDate(sim.fundFullMonth);
-  else fundEl.textContent = (projState.split > 0 ? '—' : 'add a split');
+  else if (sim.fundFullMonth != null) {
+    fundEl.textContent = monthsToDate(sim.fundFullMonth);
+    fundEl.style.fontSize = '';
+  }
+  else if (projState.split <= 0) fundEl.textContent = 'raise split %';
+  else if (sim.fullyMonth == null) fundEl.textContent = 'after debt clears';
+  else fundEl.textContent = 'beyond horizon';
   if (noMinDebt) {
     document.getElementById('sim-marker').textContent =
       `⚠ "${noMinDebt.name}" has no minimum payment set — at ${noMinDebt.rate}% it only clears once the overpayment reaches it. Set a minimum for an accurate baseline.`;
@@ -1828,8 +1978,12 @@ function drawChart(sim) {
     // snapshots since the plan started
     const snaps = (S.log || []).map(r => ({ mo: parseMonthAbs(r.month) - planState.startAbs, debt: parseNum(r.debt) }))
       .filter(s => s.mo >= 0 && s.mo <= cutoff && s.debt > 0);
+    const savProj = simOpts() ? sim.savingsSeries : null;
+    const savSnaps = (S.log || []).map(r => ({ mo: parseMonthAbs(r.month) - planState.startAbs, sav: parseNum(r.savings) }))
+      .filter(s => s.mo >= 0 && s.mo <= cutoff && s.sav > 0);
     const visPlan = planSeries.slice(0, cutoff + 1);
-    const maxBal = Math.max(...visPlan, ...liveSeries.slice(0, cutoff + 1), ...snaps.map(s => s.debt), 1);
+    const maxBal = Math.max(...visPlan, ...liveSeries.slice(0, cutoff + 1), ...snaps.map(s => s.debt),
+      ...(savProj || []), ...savSnaps.map(s => s.sav), 1);
     const yAt = v => padT + plotH - (v / maxBal) * plotH;
     drawGrid(maxBal, monthsToDate(cutoff));
 
@@ -1850,8 +2004,17 @@ function drawChart(sim) {
     liveSeries.forEach((v, i) => { const mo = elapsed + i; if (mo > cutoff) return; const x = xAt(mo), y = yAt(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
     ctx.strokeStyle = '#0FB8A0'; ctx.lineWidth = 2; ctx.stroke();
 
-    // actual snapshots (amber)
+    // projected savings (green) — savings starts at "now" and rises
+    if (savProj) {
+      ctx.beginPath();
+      let started = false;
+      savProj.forEach((v, i) => { const mo = elapsed + i; if (mo > cutoff) return; const x = xAt(mo), y = yAt(v); started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true); });
+      ctx.strokeStyle = '#34D399'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // actual snapshots: debt (amber) + savings (green ring)
     snaps.forEach(s => { ctx.beginPath(); ctx.arc(xAt(s.mo), yAt(s.debt), 3.5, 0, Math.PI * 2); ctx.fillStyle = '#F59E0B'; ctx.fill(); });
+    savSnaps.forEach(s => { ctx.beginPath(); ctx.arc(xAt(s.mo), yAt(s.sav), 3.5, 0, Math.PI * 2); ctx.strokeStyle = '#34D399'; ctx.lineWidth = 2; ctx.stroke(); });
     return;
   }
 
@@ -1863,7 +2026,9 @@ function drawChart(sim) {
     series = series.slice(0, cutoff + 1);
   }
   const past = (S.log || []).map(r => parseNum(r.debt)).filter(v => v > 0).reverse();
-  const maxBal = Math.max(...series, ...past, 1);
+  const savProj = simOpts() ? sim.savingsSeries.slice(0, cutoff + 1) : null;
+  const pastSav = (S.log || []).map(r => parseNum(r.savings)).filter(v => v > 0).reverse();
+  const maxBal = Math.max(...series, ...past, ...(savProj || []), ...pastSav, 1);
   const totalX = past.length + series.length - 1 || 1;
   const xAt = i => padL + (i / totalX) * plotW;
   const yAt = v => padT + plotH - (v / maxBal) * plotH;
@@ -1882,7 +2047,15 @@ function drawChart(sim) {
   ctx.lineTo(nowX, padT + plotH); ctx.closePath();
   ctx.fillStyle = 'rgba(15,184,160,0.10)'; ctx.fill();
 
+  // projected savings (green) — rises from "now" forward
+  if (savProj) {
+    ctx.beginPath();
+    savProj.forEach((v, i) => { const x = xAt(past.length + i), y = yAt(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.strokeStyle = '#34D399'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
   past.forEach((v, i) => { ctx.beginPath(); ctx.arc(xAt(i), yAt(v), 3, 0, Math.PI * 2); ctx.fillStyle = '#F59E0B'; ctx.fill(); });
+  pastSav.forEach((v, i) => { ctx.beginPath(); ctx.arc(xAt(i), yAt(v), 3, 0, Math.PI * 2); ctx.strokeStyle = '#34D399'; ctx.lineWidth = 2; ctx.stroke(); });
 }
 
 // ─── Projection UI handlers ─────────────────────────────────────────────────
@@ -2352,6 +2525,7 @@ function renderAll() {
   restoreInputs();
   loadProjState();
   loadPlan();
+  loadSnapViz();
   document.getElementById('proj-zoom').textContent = 'Zoom: ' + (projState.zoom === 'consumer' ? 'consumer window' : 'full horizon');
   recalc();
   switchProjTab(projState.tab || 'simulator');
