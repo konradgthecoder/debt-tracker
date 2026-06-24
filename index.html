@@ -288,7 +288,72 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .chat-meta { display: flex; justify-content: space-between; align-items: center; }
 .chat-counter { font-size: 0.7rem; color: var(--dim); }
 
+/* ─── Projection ─── */
+.proj-wrap {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 1.2rem 1.4rem; display: flex; flex-direction: column; gap: 1.1rem;
+}
+.proj-milestones { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.proj-ms {
+  background: var(--card2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.8rem 1rem; display: flex; flex-direction: column; gap: 0.2rem;
+}
+.proj-ms .ms-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.proj-ms .ms-date  { font-size: 1.15rem; font-weight: 700; color: var(--teal); font-variant-numeric: tabular-nums; }
+.proj-ms.full .ms-date { color: var(--amber); }
+.proj-ms .ms-sub   { font-size: 0.72rem; color: var(--dim); }
+.proj-tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--border); }
+.proj-tab {
+  padding: 0.45rem 0.9rem; font-size: 0.8rem; font-weight: 600; color: var(--muted);
+  cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent;
+  font-family: inherit; transition: all 0.15s;
+}
+.proj-tab:hover { color: var(--text); }
+.proj-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+.proj-panel { display: none; }
+.proj-panel.active { display: flex; flex-direction: column; gap: 1rem; }
+.sim-controls { display: flex; flex-direction: column; gap: 0.5rem; }
+.sim-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.sim-slider { flex: 1; min-width: 200px; accent-color: var(--teal); }
+.sim-extra-input {
+  width: 130px; background: var(--card2); border: 1px solid var(--border2); border-radius: 6px;
+  padding: 0.35rem 0.6rem; color: var(--text); font-family: 'SF Mono','Menlo',monospace;
+  font-size: 0.85rem; outline: none; text-align: right;
+}
+.sim-extra-input:focus { border-color: var(--teal); }
+.sim-marker { font-size: 0.72rem; color: var(--dim); }
+.sim-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
+.sim-stat { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 0.9rem; }
+.sim-stat .ss-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.sim-stat .ss-val { font-size: 1rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.strat-select, .proj-zoom-btn {
+  background: var(--card2); border: 1px solid var(--border2); border-radius: 6px;
+  padding: 0.3rem 0.7rem; color: var(--text); font-family: inherit; font-size: 0.8rem; cursor: pointer; outline: none;
+}
+.proj-zoom-btn:hover { border-color: var(--teal); }
+.cmp-table { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+.cmp-table th, .cmp-table td { padding: 0.5rem 0.8rem; border: 1px solid var(--border2); text-align: right; }
+.cmp-table th:first-child, .cmp-table td:first-child { text-align: left; }
+.cmp-table th { background: var(--card2); color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.cmp-table td { font-variant-numeric: tabular-nums; }
+.cmp-table tr.best td { background: rgba(15,184,160,0.08); }
+.cmp-best-tag { color: var(--teal); font-size: 0.68rem; font-weight: 700; }
+.proj-chart-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+#proj-canvas { width: 100%; height: 240px; display: block; }
+.proj-legend { display: flex; gap: 1rem; font-size: 0.72rem; color: var(--muted); }
+.proj-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.proj-legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.ai-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.2rem; }
+.ai-chip {
+  padding: 0.3rem 0.7rem; border-radius: 14px; font-size: 0.76rem; cursor: pointer;
+  background: var(--card2); border: 1px solid var(--border2); color: var(--muted); font-family: inherit;
+  transition: all 0.15s;
+}
+.ai-chip:hover { border-color: var(--teal); color: var(--teal); }
+
 @media (max-width: 620px) {
+  .sim-stats { grid-template-columns: 1fr; }
+  .proj-milestones { grid-template-columns: 1fr; }
   .snap-grid { grid-template-columns: 1fr; }
   .ribbon-stats { gap: 1rem; }
   .ribbon { flex-direction: column; align-items: flex-start; }
@@ -506,6 +571,78 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
     <button class="add-row-btn" onclick="addLogRow()">+ add month manually</button>
   </section>
 
+  <!-- PROJECTION -->
+  <section id="proj-section">
+    <div class="section-head">
+      <span class="section-title">Payoff projection</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="proj-wrap">
+      <div class="proj-milestones">
+        <div class="proj-ms">
+          <span class="ms-label">Consumer debt-free</span>
+          <span class="ms-date" id="ms-consumer">—</span>
+          <span class="ms-sub" id="ms-consumer-sub">everything except mortgage</span>
+        </div>
+        <div class="proj-ms full">
+          <span class="ms-label">Fully debt-free</span>
+          <span class="ms-date" id="ms-full">—</span>
+          <span class="ms-sub" id="ms-full-sub">mortgage included</span>
+        </div>
+      </div>
+
+      <div class="proj-tabs">
+        <button class="proj-tab active" data-tab="simulator" onclick="switchProjTab('simulator')">Simulator</button>
+        <button class="proj-tab" data-tab="compare" onclick="switchProjTab('compare')">Strategy comparison</button>
+        <button class="proj-tab" data-tab="chart" onclick="switchProjTab('chart')">Chart</button>
+      </div>
+
+      <!-- Simulator -->
+      <div class="proj-panel active" id="panel-simulator">
+        <div class="sim-controls">
+          <div class="sim-row">
+            <label class="insights-label">Strategy</label>
+            <select class="strat-select" id="sim-strategy" onchange="onStrategyChange(this.value)">
+              <option value="avalanche">Avalanche (highest rate first)</option>
+              <option value="snowball">Snowball (lowest balance first)</option>
+              <option value="manual">Manual (table order)</option>
+            </select>
+          </div>
+          <div class="sim-row">
+            <label class="insights-label">Extra / mo</label>
+            <input type="range" class="sim-slider" id="sim-slider" min="0" max="100" value="0" oninput="onSliderInput(this.value)">
+            <input type="text" inputmode="decimal" class="sim-extra-input" id="sim-extra" value="0" onchange="onExtraInput(this.value)">
+            <span class="insights-label">PLN</span>
+          </div>
+          <span class="sim-marker" id="sim-marker"></span>
+        </div>
+        <div class="sim-stats">
+          <div class="sim-stat"><div class="ss-label">Consumer-free</div><div class="ss-val" id="sim-consumer">—</div></div>
+          <div class="sim-stat"><div class="ss-label">Fully debt-free</div><div class="ss-val" id="sim-full">—</div></div>
+          <div class="sim-stat"><div class="ss-label">Interest saved vs minimums</div><div class="ss-val" id="sim-saved">—</div></div>
+        </div>
+      </div>
+
+      <!-- Comparison -->
+      <div class="proj-panel" id="panel-compare">
+        <div style="overflow-x:auto"><table class="cmp-table" id="cmp-table"></table></div>
+        <span class="sim-marker">Same extra/mo applied three ways. Foreign debt converted to PLN at the live rate.</span>
+      </div>
+
+      <!-- Chart -->
+      <div class="proj-panel" id="panel-chart">
+        <div class="proj-chart-head">
+          <div class="proj-legend">
+            <span><span class="dot" style="background:var(--teal)"></span>Projected total debt</span>
+            <span><span class="dot" style="background:var(--amber)"></span>Recorded snapshots</span>
+          </div>
+          <button class="proj-zoom-btn" id="proj-zoom" onclick="toggleZoom()">Zoom: consumer window</button>
+        </div>
+        <canvas id="proj-canvas"></canvas>
+      </div>
+    </div>
+  </section>
+
   <!-- AI INSIGHTS -->
   <section id="insights-section">
     <div class="section-head">
@@ -533,6 +670,14 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
             <textarea id="memory-notes" class="chat-memory-area" placeholder="e.g. I actually spend ~500 PLN on dining out. My income includes a quarterly bonus of ~5000 PLN. Ignore student loans for now." oninput="saveMemoryNotes(this.value)" rows="3"></textarea>
             <p class="chat-memory-hint" style="margin-top:0.3rem">Injected into every analysis. Edit freely — Claude reads this on each call.</p>
           </div>
+        </div>
+        <!-- Suggested follow-ups -->
+        <div class="ai-chips" id="ai-chips">
+          <button class="ai-chip" onclick="useChip(this)">Is my simulated overpayment realistic?</button>
+          <button class="ai-chip" onclick="useChip(this)">Should I build savings before overpaying?</button>
+          <button class="ai-chip" onclick="useChip(this)">Which debt do I attack after the credit cards?</button>
+          <button class="ai-chip" onclick="useChip(this)">What if I cut dining to 300/mo?</button>
+          <button class="ai-chip" onclick="useChip(this)">What if I get a 10% raise?</button>
         </div>
         <!-- Conversation history -->
         <div id="chat-history" class="chat-history"></div>
@@ -1141,6 +1286,285 @@ function recalc() {
     ribFree.textContent = fmt(free) + '/mo';
     ribFree.className   = 'val ' + (free > 2000 ? 'good' : free > 0 ? 'warn' : 'danger');
   } else { ribFree.textContent = '—'; ribFree.className = 'val neutral'; }
+
+  renderProjection();
+}
+
+// ─── Payoff projection engine ──────────────────────────────────────────────
+const PROJ_STORAGE = 'debt_tracker_proj';
+let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator' };
+
+function loadProjState() {
+  try { Object.assign(projState, JSON.parse(localStorage.getItem(PROJ_STORAGE) || '{}')); } catch {}
+}
+function saveProjState() { localStorage.setItem(PROJ_STORAGE, JSON.stringify(projState)); }
+
+// Normalize debts to PLN. Returns [{name, bal, rate, min, isMortgage}]
+function projDebts() {
+  const cadRate = S.cadRate || 0;
+  return S.debts.map(d => {
+    const isForeign = d.type === 'foreign';
+    let bal = parseFloat(d.balance) || 0;
+    let min = parseFloat(d.min) || 0;
+    if (isForeign) { bal *= cadRate; min *= cadRate; }
+    return { name: d.name || 'Debt', bal, rate: parseFloat(d.rate) || 0, min, isMortgage: d.type === 'mortgage' };
+  }).filter(d => d.bal > 0);
+}
+
+function orderDebts(debts, strategy) {
+  const arr = debts.map((d, i) => ({ ...d, _i: i }));
+  if (strategy === 'avalanche') arr.sort((a, b) => b.rate - a.rate || a.bal - b.bal);
+  else if (strategy === 'snowball') arr.sort((a, b) => a.bal - b.bal);
+  // manual = table order (unchanged)
+  return arr;
+}
+
+// Simulate month-by-month. extra = additional PLN/mo on top of all minimums.
+// Returns { months, series:[totalBal per month], consumerMonth, fullyMonth, totalInterest }
+function simulate(debts, extra, strategy) {
+  const order = orderDebts(debts, strategy);
+  let state = order.map(d => ({ ...d }));
+  const start = state.reduce((s, d) => s + d.bal, 0);
+  const series = [start];
+  let totalInterest = 0, consumerMonth = null, fullyMonth = null;
+  const MAX = 1200;
+
+  for (let m = 1; m <= MAX; m++) {
+    const active = state.filter(d => d.bal > 0.005);
+    if (!active.length) { fullyMonth = fullyMonth ?? m - 1; break; }
+
+    // 1. accrue interest
+    active.forEach(d => { const i = d.bal * (d.rate / 100 / 12); d.bal += i; totalInterest += i; });
+
+    // 2. budget = all minimums (of active) + extra
+    let budget = active.reduce((s, d) => s + d.min, 0) + extra;
+
+    // 3. pay minimums
+    active.forEach(d => { const p = Math.min(d.min, d.bal, budget); d.bal -= p; budget -= p; });
+
+    // 4. cascade remaining onto highest-priority active debt
+    for (const d of active) {
+      if (budget <= 0) break;
+      if (d.bal <= 0.005) continue;
+      const p = Math.min(d.bal, budget);
+      d.bal -= p; budget -= p;
+    }
+
+    state.forEach(d => { if (d.bal < 0.005) d.bal = 0; });
+
+    // milestones
+    if (consumerMonth === null && state.filter(d => !d.isMortgage).every(d => d.bal <= 0.005))
+      consumerMonth = m;
+    const tot = state.reduce((s, d) => s + d.bal, 0);
+    series.push(tot);
+
+    if (state.every(d => d.bal <= 0.005)) { fullyMonth = m; break; }
+    // divergence guard: a positive-rate debt with too small a payment grows without bound
+    if (tot > start * 1.5 && m > 12) { fullyMonth = null; break; }
+  }
+  return { series, consumerMonth, fullyMonth, totalInterest, months: series.length - 1 };
+}
+
+function monthsToDate(m) {
+  if (m == null) return '—';
+  const d = new Date();
+  d.setMonth(d.getMonth() + m);
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+function monthsLabel(m) {
+  if (m == null) return '';
+  const y = Math.floor(m / 12), mo = m % 12;
+  return (y ? `${y}y ` : '') + (mo ? `${mo}mo` : (y ? '' : '0mo'));
+}
+
+function freeCashNow() {
+  const totalMin = _calc.totalMin || 0;
+  return _calc.free != null ? Math.max(0, _calc.free) : 0;
+}
+
+function renderProjection() {
+  const debts = projDebts();
+  const free = freeCashNow();
+
+  // clamp / default extra
+  if (projState.extra == null) projState.extra = 0;
+  if (projState.extra > free) projState.extra = free;
+
+  // sync controls
+  const slider = document.getElementById('sim-slider');
+  const extraInp = document.getElementById('sim-extra');
+  const stratSel = document.getElementById('sim-strategy');
+  if (!slider) return;
+  slider.max = Math.max(1, Math.round(free));
+  slider.value = Math.round(projState.extra);
+  extraInp.value = projState.extra.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  stratSel.value = projState.strategy;
+
+  document.getElementById('sim-marker').textContent = free > 0
+    ? `Free cash ceiling: ${fmt(free)}/mo (income − minimums − fixed costs). Hidden costs make real room lower.`
+    : 'Set your income above to enable the slider.';
+
+  if (!debts.length) {
+    ['ms-consumer','ms-full','sim-consumer','sim-full','sim-saved'].forEach(id => document.getElementById(id).textContent = '—');
+    document.getElementById('cmp-table').innerHTML = '<tr><td>Add debts to compare strategies.</td></tr>';
+    drawChart(null);
+    return;
+  }
+
+  const sim = simulate(debts, projState.extra, projState.strategy);
+  const base = simulate(debts, 0, projState.strategy); // minimums-only baseline
+  // baseline only meaningful if minimums alone clear everything; a positive-rate
+  // debt with no minimum never amortizes (interest → ∞), so saved is undefined.
+  const noMinDebt = debts.find(d => d.rate > 0 && d.min <= 0);
+  const baselineValid = base.fullyMonth != null && !noMinDebt;
+  const saved = baselineValid ? base.totalInterest - sim.totalInterest : null;
+
+  // milestones (headline) reflect current scenario
+  document.getElementById('ms-consumer').textContent = monthsToDate(sim.consumerMonth);
+  document.getElementById('ms-consumer-sub').textContent = sim.consumerMonth != null ? `in ${monthsLabel(sim.consumerMonth)} · everything except mortgage` : 'everything except mortgage';
+  document.getElementById('ms-full').textContent = monthsToDate(sim.fullyMonth);
+  document.getElementById('ms-full-sub').textContent = sim.fullyMonth != null ? `in ${monthsLabel(sim.fullyMonth)} · mortgage included` : 'mortgage included';
+
+  // simulator stats
+  document.getElementById('sim-consumer').textContent = monthsToDate(sim.consumerMonth);
+  document.getElementById('sim-full').textContent = monthsToDate(sim.fullyMonth);
+  document.getElementById('sim-saved').textContent = saved != null && saved > 0 ? fmt(saved) : '—';
+  if (noMinDebt) {
+    document.getElementById('sim-marker').textContent =
+      `⚠ "${noMinDebt.name}" has no minimum payment set — at ${noMinDebt.rate}% it only clears once the overpayment reaches it. Set a minimum for an accurate baseline.`;
+  }
+
+  renderComparison(debts, projState.extra);
+  drawChart(sim);
+}
+
+function renderComparison(debts, extra) {
+  const strategies = [
+    { key: 'avalanche', label: 'Avalanche' },
+    { key: 'snowball',  label: 'Snowball' },
+    { key: 'manual',    label: 'Manual order' },
+  ];
+  const rows = strategies.map(s => {
+    const r = simulate(debts, extra, s.key);
+    return { ...s, ...r };
+  });
+  const bestFull = Math.min(...rows.filter(r => r.fullyMonth != null).map(r => r.fullyMonth));
+  const html = `
+    <thead><tr><th>Strategy</th><th>Consumer-free</th><th>Fully free</th><th>Total interest</th></tr></thead>
+    <tbody>${rows.map(r => `
+      <tr class="${r.fullyMonth === bestFull ? 'best' : ''}">
+        <td>${r.label}${r.fullyMonth === bestFull ? ' <span class="cmp-best-tag">✦ fastest</span>' : ''}</td>
+        <td>${monthsToDate(r.consumerMonth)}</td>
+        <td>${monthsToDate(r.fullyMonth)}</td>
+        <td>${fmt(r.totalInterest)}</td>
+      </tr>`).join('')}</tbody>`;
+  document.getElementById('cmp-table').innerHTML = html;
+}
+
+// ─── Chart (canvas) ─────────────────────────────────────────────────────────
+function drawChart(sim) {
+  const canvas = document.getElementById('proj-canvas');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 600, cssH = 240;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const padL = 54, padR = 12, padT = 14, padB = 26;
+  const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+
+  if (!sim || !sim.series.length) {
+    ctx.fillStyle = '#3A5878'; ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillText('Add debts to see the projection.', padL, padT + plotH / 2);
+    return;
+  }
+
+  // window selection
+  let series = sim.series;
+  let cutoff = series.length - 1;
+  if (projState.zoom === 'consumer' && sim.consumerMonth != null) {
+    cutoff = Math.min(series.length - 1, sim.consumerMonth + 6);
+    series = series.slice(0, cutoff + 1);
+  }
+
+  // past snapshots (chronological): S.log most-recent-first
+  const past = (S.log || []).map(r => parseNum(r.debt)).filter(v => v > 0).reverse();
+  const maxBal = Math.max(...series, ...past, 1);
+  const totalX = past.length + series.length - 1 || 1;
+
+  const xAt = i => padL + (i / totalX) * plotW;           // i in [0, totalX]
+  const yAt = v => padT + plotH - (v / maxBal) * plotH;
+
+  // grid + y labels
+  ctx.strokeStyle = '#1C3550'; ctx.lineWidth = 1; ctx.fillStyle = '#6B8BAD'; ctx.font = '10px -apple-system, sans-serif';
+  for (let g = 0; g <= 4; g++) {
+    const v = maxBal * (1 - g / 4), y = padT + (plotH * g / 4);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(cssW - padR, y); ctx.stroke();
+    ctx.fillText(Math.round(v / 1000) + 'k', 6, y + 3);
+  }
+
+  // "now" divider
+  const nowX = xAt(past.length);
+  ctx.strokeStyle = '#254567'; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(nowX, padT); ctx.lineTo(nowX, padT + plotH); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#3A5878'; ctx.fillText('now', nowX + 3, padT + 10);
+
+  // projected curve + fill
+  ctx.beginPath();
+  series.forEach((v, i) => { const x = xAt(past.length + i), y = yAt(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.strokeStyle = '#0FB8A0'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.lineTo(xAt(past.length + series.length - 1), padT + plotH);
+  ctx.lineTo(nowX, padT + plotH); ctx.closePath();
+  ctx.fillStyle = 'rgba(15,184,160,0.10)'; ctx.fill();
+
+  // past snapshot dots
+  past.forEach((v, i) => {
+    ctx.beginPath(); ctx.arc(xAt(i), yAt(v), 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#F59E0B'; ctx.fill();
+  });
+
+  // x-axis end label
+  ctx.fillStyle = '#6B8BAD';
+  ctx.fillText(monthsToDate(cutoff), cssW - padR - 54, cssH - 8);
+}
+
+// ─── Projection UI handlers ─────────────────────────────────────────────────
+function switchProjTab(tab) {
+  projState.tab = tab; saveProjState();
+  document.querySelectorAll('.proj-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.proj-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+  if (tab === 'chart') renderProjection();
+}
+function onStrategyChange(v) { projState.strategy = v; saveProjState(); renderProjection(); }
+function onSliderInput(v) { projState.extra = parseFloat(v) || 0; saveProjState(); renderProjection(); }
+function onExtraInput(v) {
+  let n = parseNum(v) || 0;
+  const free = freeCashNow();
+  if (n > free) n = free;
+  projState.extra = Math.max(0, n); saveProjState(); renderProjection();
+}
+function toggleZoom() {
+  projState.zoom = projState.zoom === 'consumer' ? 'full' : 'consumer';
+  document.getElementById('proj-zoom').textContent = 'Zoom: ' + (projState.zoom === 'consumer' ? 'consumer window' : 'full horizon');
+  saveProjState(); renderProjection();
+}
+
+// projection summary for the AI prompt
+function projectionSummary() {
+  const debts = projDebts();
+  if (!debts.length) return '';
+  const sim = simulate(debts, projState.extra || 0, projState.strategy);
+  const order = orderDebts(debts, projState.strategy).map(d => d.name).join(' → ');
+  return `\nPAYOFF PROJECTION (computed by the tracker engine — reason about THESE numbers, do not re-derive)
+- Strategy: ${projState.strategy} (payoff order: ${order})
+- Simulated extra overpayment: ${fmt(projState.extra || 0)}/mo on top of all minimums
+- Consumer debt-free (excl. mortgage): ${monthsToDate(sim.consumerMonth)}${sim.consumerMonth != null ? ` (${monthsLabel(sim.consumerMonth)})` : ''}
+- Fully debt-free (incl. mortgage): ${monthsToDate(sim.fullyMonth)}${sim.fullyMonth != null ? ` (${monthsLabel(sim.fullyMonth)})` : ''}
+- Total interest remaining under this plan: ${fmt(sim.totalInterest)}
+`;
 }
 
 // ─── Restore inputs & init ─────────────────────────────────────────────────
@@ -1301,6 +1725,12 @@ function chatKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendFollowUp(); }
 }
 
+function useChip(el) {
+  const input = document.getElementById('chat-input');
+  input.value = el.textContent;
+  input.focus();
+}
+
 async function streamToElement(key, messages, outputEl, appendToEl) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -1449,7 +1879,7 @@ ${(S.costs || []).map(c => {
     const amt = parseFloat(c.amount);
     return amt > 0 ? `  - ${c.name}: ${fmtN(amt)} PLN` : `  - ${c.name}: ⚠ not filled in`;
   }).join('\n') || '  none'}
-
+${projectionSummary()}
 IMPORTANT CONTEXT
 - My free cash is OVERSTATED. The fixed costs above are incomplete — they only reflect what I've explicitly tracked.
 - I am a person in my late 20s living in Poland. Think about what a real person spends money on that I have NOT listed at all as a category. Common examples: clothing, haircuts/grooming, medical/pharmacy, dining out / bars, coffee, gifts, holidays/travel, car maintenance, home supplies, subscriptions I forgot to list, etc.
@@ -1462,6 +1892,7 @@ Please give me:
 2. **Budget split for this month** — table: category | amount | notes. Must add up to realistic free cash. Include savings buffer, overpayment, and discretionary.
 3. **Which debt to overpay and by how much** — based on realistic free cash, not stated free cash.
 4. **Top 2 budget categories to add** — the missing expenses that would most change the plan once tracked properly.
+5. **Reality-check my projection** — the tracker's projected debt-free dates above assume I deploy the full simulated overpayment. Given the hidden costs you identified, is that overpayment realistic? If not, roughly how much later do those dates slip?
 
 Be direct, use specific PLN amounts, keep it tight.`;
 }
@@ -1550,7 +1981,10 @@ function renderAll() {
   renderCosts();
   renderLog();
   restoreInputs();
+  loadProjState();
+  document.getElementById('proj-zoom').textContent = 'Zoom: ' + (projState.zoom === 'consumer' ? 'consumer window' : 'full horizon');
   recalc();
+  switchProjTab(projState.tab || 'simulator');
   if (hasForeignDebts()) fetchCadRate();
   loadApiKey();
   loadChatHistory();
@@ -1561,6 +1995,12 @@ function renderAll() {
     renderChatHistory();
   }
 }
+
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => { if (document.getElementById('panel-chart').classList.contains('active')) renderProjection(); }, 150);
+});
 
 renderAll();
 </script>
