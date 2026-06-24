@@ -1,0 +1,1362 @@
+
+<title>Debt Tracker — Konrad</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy:   #0B1622;
+  --card:   #112033;
+  --card2:  #162840;
+  --border: #1C3550;
+  --border2:#254567;
+  --teal:   #0FB8A0;
+  --amber:  #F59E0B;
+  --coral:  #F4566A;
+  --text:   #E8F0F8;
+  --muted:  #6B8BAD;
+  --dim:    #3A5878;
+  --green:  #22C99A;
+}
+body {
+  background: var(--navy); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 13.5px; line-height: 1.5; min-height: 100vh;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Ribbon ─── */
+.ribbon {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--card); border-bottom: 1px solid var(--border);
+  padding: 0.7rem 1.5rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  flex-wrap: wrap;
+}
+.ribbon-left { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; }
+.ribbon-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); white-space: nowrap; }
+.ribbon-actions { display: flex; gap: 0.5rem; }
+.btn {
+  padding: 0.3rem 0.75rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; font-family: inherit; border: 1px solid var(--border2);
+  transition: all 0.15s; white-space: nowrap;
+}
+.btn-ghost { background: transparent; color: var(--muted); }
+.btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
+.btn-primary { background: rgba(15,184,160,0.15); color: var(--teal); border-color: rgba(15,184,160,0.35); }
+.btn-primary:hover { background: rgba(15,184,160,0.25); }
+.btn-danger { background: rgba(244,86,106,0.12); color: var(--coral); border-color: rgba(244,86,106,0.3); }
+.btn-danger:hover { background: rgba(244,86,106,0.22); }
+
+.ribbon-stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+.ribbon-stat { display: flex; flex-direction: column; align-items: flex-end; }
+.ribbon-stat .label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 0.1rem; }
+.ribbon-stat .val { font-size: 1.3rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+.val.good   { color: var(--green); }
+.val.warn   { color: var(--amber); }
+.val.danger { color: var(--coral); }
+.val.neutral{ color: var(--text); }
+
+/* ─── Toast ─── */
+.toast {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(4px);
+  background: var(--card2); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 0.5rem 1.1rem; font-size: 0.82rem; color: var(--text);
+  opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 200;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.ok   { border-color: rgba(34,201,154,0.4); color: var(--green); }
+.toast.err  { border-color: rgba(244,86,106,0.4); color: var(--coral); }
+
+/* ─── Layout ─── */
+main { padding: 1.5rem 1.5rem 4rem; display: grid; gap: 2rem; }
+
+.section-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.9rem; }
+.section-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); white-space: nowrap; }
+.section-line { flex: 1; height: 1px; background: var(--border); }
+.section-action { font-size: 0.72rem; }
+
+/* ─── Tables ─── */
+.table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: var(--card2); }
+th {
+  padding: 0.6rem 0.85rem; text-align: left;
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); font-weight: 600; white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--fg); }
+th.sort-asc::after  { content: ' ↑'; color: var(--accent); }
+th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+th:first-child, td:first-child { min-width: 200px; width: 200px; }
+th:nth-child(2), td:nth-child(2) { min-width: 120px; width: 120px; }
+th.num, td.num { text-align: right; }
+td { padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr.total-row td { background: var(--card2); font-weight: 700; border-top: 1px solid var(--border2); }
+tr.group-child:hover td, #costs-body tr:hover td { background: rgba(255,255,255,0.03); }
+
+/* ─── Editable cells ─── */
+.editable {
+  background: transparent; border: none; outline: none;
+  color: var(--text); font-family: inherit; font-size: inherit;
+  font-variant-numeric: tabular-nums; width: 100%; text-align: right;
+  cursor: text;
+}
+.editable:focus { color: var(--teal); }
+.editable.left { text-align: left; }
+.editable::placeholder { color: var(--dim); }
+
+/* computed */
+.computed { color: var(--muted); text-align: right; font-size: 0.88em; }
+
+/* monospace numbers in data cells */
+td.num, td.num .editable, td.num.computed {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono', monospace;
+  font-size: 0.84em;
+}
+
+/* CAD rate bar */
+.rate-bar {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.4rem 1rem; background: rgba(168,130,255,0.07);
+  border-bottom: 1px solid rgba(168,130,255,0.18);
+  font-size: 0.78rem; color: var(--muted);
+}
+.rate-bar strong { color: #A882FF; font-variant-numeric: tabular-nums; }
+.rate-bar button { font-size: 0.72rem; padding: 0.15rem 0.5rem; }
+.rate-stale { color: var(--amber) !important; }
+
+/* type select */
+.type-sel {
+  background: transparent; border: none; color: var(--muted); font-size: 0.75rem;
+  cursor: pointer; font-family: inherit; outline: none; padding: 0;
+}
+.type-sel option { background: var(--card2); }
+
+/* del button */
+.del-btn {
+  background: none; border: none; color: var(--dim); cursor: pointer;
+  font-size: 0.8rem; opacity: 0; transition: opacity 0.15s; padding: 0.1rem 0.3rem;
+  font-family: inherit;
+}
+tr:hover .del-btn { opacity: 1; }
+.del-btn:hover { color: var(--coral); }
+
+/* group header rows */
+tr.group-header td {
+  background: var(--card2); padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--border2); cursor: pointer;
+  user-select: none;
+}
+tr.group-header:hover td { background: #1d2f48; }
+.group-label { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.82rem; }
+.group-chevron { font-size: 0.65rem; transition: transform 0.2s; display: inline-block; color: var(--dim); }
+.group-header.collapsed .group-chevron { transform: rotate(-90deg); }
+.group-badge {
+  font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
+  padding: 0.1rem 0.45rem; border-radius: 999px;
+}
+.badge-interest { background: rgba(244,86,106,0.15); color: var(--coral); }
+.badge-zero     { background: rgba(15,184,160,0.12); color: var(--teal); }
+.badge-foreign  { background: rgba(168,130,255,0.15); color: #A882FF; }
+.group-totals { display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--muted); margin-left: auto; }
+.group-totals span { white-space: nowrap; }
+tr.group-child { transition: opacity 0.15s; }
+tr.group-child.hidden { display: none; }
+
+/* ─── Drag & drop ─── */
+.drag-handle {
+  width: 24px; padding: 0 0.3rem; cursor: grab; color: var(--dim);
+  font-size: 1rem; text-align: center; user-select: none;
+}
+.drag-handle:hover { color: var(--muted); }
+.drag-handle:active { cursor: grabbing; }
+tr.dragging { opacity: 0.35; }
+tr.drag-target-above td { box-shadow: inset 0 2px 0 var(--teal); }
+tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
+
+/* add row */
+.add-row-btn {
+  width: 100%; margin-top: 0.5rem; padding: 0.45rem;
+  background: transparent; border: 1px dashed var(--border2); border-radius: 8px;
+  color: var(--dim); font-size: 0.82rem; cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+.add-row-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+/* ─── Snapshot cards ─── */
+.snap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.snap-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.3rem; }
+.snap-card.full { grid-column: 1 / -1; }
+.snap-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.6rem; }
+.snap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+.snap-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: 0.9rem; }
+.snap-row .key { color: var(--muted); }
+.snap-row .amt { font-weight: 600; text-align: right; }
+.snap-divider { height: 1px; background: var(--border); margin: 0.5rem 0; }
+.snap-total-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.snap-total-key { font-weight: 700; font-size: 0.88rem; }
+.snap-total-val { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
+
+/* progress bars in payoff card */
+.prog-item { display: flex; flex-direction: column; gap: 0.3rem; }
+.prog-row { display: flex; justify-content: space-between; width: 100%; font-size: 0.85rem; }
+.prog-bar-bg { width: 100%; height: 4px; background: var(--border2); border-radius: 999px; overflow: hidden; }
+.prog-bar    { height: 100%; border-radius: 999px; background: var(--teal); transition: width 0.4s; }
+
+/* ─── AI Insights ─── */
+.insights-wrap {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 1.2rem 1.4rem; display: flex; flex-direction: column; gap: 1rem;
+}
+.insights-key-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.insights-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); white-space: nowrap; }
+.insights-key-input {
+  flex: 1; min-width: 220px; max-width: 380px;
+  background: var(--card2); border: 1px solid var(--border2); border-radius: 6px;
+  padding: 0.35rem 0.7rem; color: var(--text); font-family: 'SF Mono','Menlo','Consolas',monospace;
+  font-size: 0.8rem; outline: none;
+}
+.insights-key-input:focus { border-color: var(--teal); }
+.insights-key-hint { font-size: 0.72rem; color: var(--dim); }
+.insights-btn { align-self: flex-start; font-size: 0.85rem; padding: 0.45rem 1.1rem; }
+.insights-output {
+  font-size: 0.88rem; line-height: 1.75; color: var(--text);
+  border-top: 1px solid var(--border); padding-top: 1.1rem;
+}
+.insights-output h2 { font-size: 1rem; font-weight: 700; color: var(--text); margin: 1.2rem 0 0.3rem; }
+.insights-output h3 { font-size: 0.9rem; font-weight: 700; color: var(--teal); margin: 1rem 0 0.25rem; letter-spacing: 0.01em; }
+.insights-output strong { color: var(--text); font-weight: 600; }
+.insights-output em { color: var(--muted); font-style: italic; }
+.insights-output hr { border: none; border-top: 1px solid var(--border); margin: 0.9rem 0; }
+.insights-output ul { padding-left: 1.2rem; margin: 0.3rem 0; }
+.insights-output li { margin: 0.15rem 0; }
+.insights-output p { margin: 0.4rem 0; }
+.insights-output ol { padding-left: 1.4rem; margin: 0.3rem 0; }
+.insights-output ol li { margin: 0.15rem 0; }
+.ins-table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.84rem; }
+.ins-table th, .ins-table td { padding: 0.3rem 0.9rem; border: 1px solid var(--border2); text-align: left; }
+.ins-table th { background: var(--card2); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.ins-table td { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 620px) {
+  .snap-grid { grid-template-columns: 1fr; }
+  .ribbon-stats { gap: 1rem; }
+  .ribbon { flex-direction: column; align-items: flex-start; }
+}
+</style>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Ribbon -->
+<div class="ribbon">
+  <div class="ribbon-left">
+    <span class="ribbon-title">Debt Tracker — Konrad</span>
+    <div class="ribbon-actions">
+      <button class="btn btn-primary" onclick="exportJSON()">↓ Export</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('import-input').click()">↑ Import</button>
+      <input id="import-input" type="file" accept=".json" style="display:none" onchange="importJSON(this)">
+    </div>
+  </div>
+  <div class="ribbon-stats">
+    <div class="ribbon-stat">
+      <span class="label">Total debt</span>
+      <span class="val neutral" id="rib-total-debt">—</span>
+    </div>
+    <div class="ribbon-stat">
+      <span class="label">Payments / mo</span>
+      <span class="val neutral" id="rib-obligations">—</span>
+    </div>
+    <div class="ribbon-stat">
+      <span class="label">Free cash / mo</span>
+      <span class="val neutral" id="rib-free">—</span>
+    </div>
+  </div>
+</div>
+
+<div class="rate-bar" id="rate-bar" style="display:none">
+  <span>CAD → PLN rate:</span>
+  <strong id="rate-val">—</strong>
+  <span id="rate-age" style="font-size:0.72rem"></span>
+  <button class="btn btn-ghost" onclick="fetchCadRate(true)" style="margin-left:0.25rem">↻ refresh</button>
+  <span style="margin-left:0.5rem;color:var(--dim)">or set manually:</span>
+  <input id="rate-manual" type="number" min="0" step="0.0001" placeholder="e.g. 2.98"
+    style="background:transparent;border:1px solid var(--border2);border-radius:4px;padding:0.15rem 0.4rem;color:var(--text);font-family:inherit;font-size:inherit;width:80px"
+    oninput="setManualRate(this.value)">
+</div>
+
+<main>
+
+  <!-- DEBTS -->
+  <section>
+    <div class="section-head">
+      <span class="section-title">Debts</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="table-wrap">
+      <table style="table-layout:fixed">
+        <colgroup>
+          <col style="width:24px">
+          <col style="width:200px">
+          <col style="width:140px">
+          <col style="width:140px">
+          <col style="width:90px">
+          <col style="width:150px">
+          <col style="width:100px">
+          <col style="width:90px">
+          <col style="width:38px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Name</th>
+            <th class="num sortable" onclick="sortDebts('balance')" id="th-balance">Balance (PLN)</th>
+            <th class="num">Original (PLN)</th>
+            <th class="num">Rate %</th>
+            <th class="num sortable" onclick="sortDebts('min')" id="th-min">Monthly payment</th>
+            <th class="num">Months left</th>
+            <th class="num">Payoff</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="debt-body"></tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td></td>
+            <td>Total</td>
+            <td class="num" id="total-balance">—</td>
+            <td></td><td></td>
+            <td class="num" id="total-min">—</td>
+            <td></td><td></td><td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- FIXED COSTS -->
+  <section>
+    <div class="section-head">
+      <span class="section-title">Fixed costs</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="table-wrap">
+      <table style="table-layout:fixed">
+        <colgroup>
+          <col style="width:24px">
+          <col>
+          <col style="width:160px">
+          <col style="width:38px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Category</th>
+            <th class="num">Monthly (PLN)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="costs-body"></tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td></td>
+            <td>Total fixed costs</td>
+            <td class="num" id="total-costs">—</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <button class="add-row-btn" onclick="addCostRow()">+ add category</button>
+  </section>
+
+  <!-- SNAPSHOT -->
+  <section>
+    <div class="section-head">
+      <span class="section-title">Monthly snapshot</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="snap-grid">
+
+      <div class="snap-card">
+        <div class="snap-label">Income &amp; outgoings</div>
+        <div class="snap-rows">
+          <div class="snap-row">
+            <span class="key">Monthly net income</span>
+            <span class="amt"><input class="editable" id="s-income" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()"></span>
+          </div>
+          <div class="snap-row">
+            <span class="key">Debt payments (auto)</span>
+            <span class="amt" id="s-debt-payments" style="color:var(--muted)">—</span>
+          </div>
+          <div class="snap-row">
+            <span class="key">Fixed costs (auto)</span>
+            <span class="amt" id="s-fixed-costs" style="color:var(--muted)">—</span>
+          </div>
+          <div class="snap-divider"></div>
+          <div class="snap-total-row">
+            <span class="snap-total-key">💰 Free cash</span>
+            <span class="snap-total-val" id="s-free">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="snap-card">
+        <div class="snap-label">Payoff progress</div>
+        <div class="snap-rows" id="payoff-progress">
+          <div style="color:var(--dim);font-size:0.85rem;">Fill in balances &amp; payments to see progress.</div>
+        </div>
+      </div>
+
+      <div class="snap-card full">
+        <div class="snap-label">Savings &amp; runway</div>
+        <div class="snap-rows">
+          <div class="snap-row">
+            <span class="key">Current savings / buffer</span>
+            <span class="amt"><input class="editable" id="s-savings" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()"></span>
+          </div>
+          <div class="snap-row">
+            <span class="key">Total monthly outgoings</span>
+            <span class="amt" id="s-monthly-expenses" style="color:var(--muted)">—</span>
+          </div>
+          <div class="snap-divider"></div>
+          <div class="snap-total-row">
+            <span class="snap-total-key">🛟 Runway</span>
+            <span class="snap-total-val" id="s-runway">—</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- MONTHLY LOG -->
+  <section>
+    <div class="section-head">
+      <span class="section-title">Monthly log</span>
+      <div class="section-line"></div>
+      <button class="btn btn-ghost section-action" onclick="snapshotNow()">📸 Snapshot now</button>
+    </div>
+    <div class="table-wrap">
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="num">Total debt (PLN)</th>
+            <th class="num">Free cash (PLN)</th>
+            <th class="num">Runway (mo)</th>
+            <th class="num">Savings (PLN)</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+    <button class="add-row-btn" onclick="addLogRow()">+ add month manually</button>
+  </section>
+
+  <!-- AI INSIGHTS -->
+  <section id="insights-section">
+    <div class="section-head">
+      <span class="section-title">AI Insights</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="insights-wrap">
+      <div class="insights-key-row">
+        <label class="insights-label">Anthropic API key</label>
+        <input id="ai-key" type="password" class="insights-key-input" placeholder="sk-ant-…" oninput="saveApiKey(this.value)">
+        <span class="insights-key-hint">stored locally, never exported</span>
+      </div>
+      <button class="btn btn-primary insights-btn" onclick="runInsights()" id="insights-btn">✦ Analyze my finances</button>
+      <div id="insights-output" class="insights-output" style="display:none"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ─── Helpers ───────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'debt_tracker_v2';
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function nowLabel() {
+  const d = new Date();
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+function fmt(n, currency = 'PLN') {
+  if (n == null || isNaN(n)) return '—';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + currency;
+}
+function fmtCAD(n) { return fmt(n, 'CAD'); }
+function fmtMo(n) {
+  if (!n || isNaN(n) || !isFinite(n) || n < 0) return '—';
+  if (n > 600) return '>50 yrs';
+  return n.toFixed(1) + ' mo';
+}
+function payoffDate(months) {
+  if (!months || isNaN(months) || !isFinite(months) || months < 0 || months > 600) return '—';
+  const d = new Date();
+  d.setMonth(d.getMonth() + Math.ceil(months));
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+function calcMonths(bal, rate, min) {
+  if (!(bal > 0) || !(min > 0)) return null;
+  if (rate > 0) {
+    const r = rate / 100 / 12;
+    const x = (bal * r) / min;
+    if (x >= 1) return Infinity; // payment doesn't cover interest
+    return -Math.log(1 - x) / Math.log(1 + r);
+  }
+  return bal / min;
+}
+
+// ─── Toast ─────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 2400);
+}
+
+// ─── State ─────────────────────────────────────────────────────────────────
+const DEFAULT_DEBTS = [
+  { name:'Credit Card', type:'interest', balance:5800, original:5800, rate:'', min:'' },
+  { name:'Car Loan',    type:'interest', balance:'',   original:'',   rate:'', min:'' },
+  { name:'Mortgage',    type:'mortgage', balance:'',   original:'',   rate:0,  min:1800 },
+  { name:'Renovation',  type:'zero',     balance:'',   original:'',   rate:0,  min:'' },
+];
+const DEFAULT_COSTS = [
+  { name:'Groceries & food',   amount: 2100 },
+  { name:'Utilities (water, heating)', amount: '' },
+  { name:'Electricity',        amount: '' },
+  { name:'Internet',           amount: '' },
+  { name:'Phone',              amount: '' },
+  { name:'Car insurance',      amount: '' },
+  { name:'Health insurance',   amount: '' },
+  { name:'Fuel / transport',   amount: '' },
+  { name:'Subscriptions',      amount: '' },
+  { name:'Gym / sport',        amount: '' },
+  { name:'Eating out',         amount: '' },
+];
+
+function freshState() {
+  return {
+    debts: JSON.parse(JSON.stringify(DEFAULT_DEBTS)),
+    costs: JSON.parse(JSON.stringify(DEFAULT_COSTS)),
+    income: '', savings: '',
+    cadRate: null, cadRateFetchedAt: null,
+    log: [],
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return freshState();
+    const s = JSON.parse(raw);
+    if (s.debts) s.debts.forEach(d => { if (d.original == null) d.original = d.balance || ''; });
+    // migrate: pull old groceries/other into costs if costs missing
+    if (!s.costs) {
+      s.costs = JSON.parse(JSON.stringify(DEFAULT_COSTS));
+      if (s.groceries) s.costs[0].amount = s.groceries;
+    }
+    return { ...freshState(), ...s };
+  } catch { return freshState(); }
+}
+
+let S = loadState();
+// live calc values for snapshot button
+let _calc = { totalBalance: 0, totalMin: 0, free: null, runway: null };
+
+function persist() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
+  catch (e) { toast('⚠ Storage full — export your data!', 'err'); }
+}
+
+// ─── Export / Import ───────────────────────────────────────────────────────
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `debt-tracker-${nowLabel().replace(' ','-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported ✓', 'ok');
+}
+
+function importJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed.debts) throw new Error('Invalid file — missing debts');
+      parsed.debts.forEach(d => { if (d.original == null) d.original = d.balance || ''; });
+      S = { ...freshState(), ...parsed };
+      persist();
+      renderAll();
+      toast('Imported ✓', 'ok');
+    } catch (err) {
+      toast('Import failed: ' + err.message, 'err');
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ─── Debt table ────────────────────────────────────────────────────────────
+const GROUPS = [
+  { key: 'interest', label: 'Interest loans',  badge: 'badge-interest', addLabel: '+ add interest loan' },
+  { key: 'zero',     label: '0% instalments',  badge: 'badge-zero',     addLabel: '+ add 0% loan' },
+  { key: 'mortgage', label: 'Mortgage',         badge: 'badge-zero',     addLabel: '+ add mortgage' },
+  { key: 'foreign',  label: 'Foreign debt',     badge: 'badge-foreign',  addLabel: '+ add foreign debt' },
+];
+const collapsed = { interest: false, zero: false, mortgage: false, foreign: false };
+
+// ─── Drag & drop ────────────────────────────────────────────────────────────
+const drag = { type: null, fromIdx: null, el: null };
+
+function clearDragClasses() {
+  document.querySelectorAll('.drag-target-above,.drag-target-below').forEach(el => {
+    el.classList.remove('drag-target-above', 'drag-target-below');
+  });
+}
+
+function setupDebtDrag(tr, idx) {
+  const handle = tr.querySelector('.drag-handle');
+  handle.addEventListener('mousedown', () => { tr.draggable = true; });
+  tr.addEventListener('dragstart', e => {
+    drag.type = 'debt'; drag.fromIdx = idx; drag.el = tr;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => tr.classList.add('dragging'), 0);
+  });
+  tr.addEventListener('dragend', () => {
+    tr.draggable = false;
+    tr.classList.remove('dragging');
+    clearDragClasses();
+  });
+  tr.addEventListener('dragover', e => {
+    if (drag.type !== 'debt') return;
+    e.preventDefault();
+    clearDragClasses();
+    const mid = tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+    tr.classList.add(e.clientY < mid ? 'drag-target-above' : 'drag-target-below');
+  });
+  tr.addEventListener('drop', e => {
+    e.preventDefault();
+    if (drag.type !== 'debt' || drag.fromIdx === idx) return;
+    const mid = tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+    const insertAfter = e.clientY >= mid;
+    const [item] = S.debts.splice(drag.fromIdx, 1);
+    const targetIdx = drag.fromIdx < idx ? idx - 1 : idx;
+    S.debts.splice(insertAfter ? targetIdx + 1 : targetIdx, 0, item);
+    // clear sort so manual order is preserved
+    debtSort.field = null; debtSort.dir = 1;
+    persist(); renderDebtTable(); recalc();
+  });
+}
+
+function setupCostDrag(tr, idx) {
+  const handle = tr.querySelector('.drag-handle');
+  handle.addEventListener('mousedown', () => { tr.draggable = true; });
+  tr.addEventListener('dragstart', e => {
+    drag.type = 'cost'; drag.fromIdx = idx; drag.el = tr;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => tr.classList.add('dragging'), 0);
+  });
+  tr.addEventListener('dragend', () => {
+    tr.draggable = false;
+    tr.classList.remove('dragging');
+    clearDragClasses();
+  });
+  tr.addEventListener('dragover', e => {
+    if (drag.type !== 'cost') return;
+    e.preventDefault();
+    clearDragClasses();
+    const mid = tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+    tr.classList.add(e.clientY < mid ? 'drag-target-above' : 'drag-target-below');
+  });
+  tr.addEventListener('drop', e => {
+    e.preventDefault();
+    if (drag.type !== 'cost' || drag.fromIdx === idx) return;
+    const mid = tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+    const insertAfter = e.clientY >= mid;
+    const [item] = S.costs.splice(drag.fromIdx, 1);
+    const targetIdx = drag.fromIdx < idx ? idx - 1 : idx;
+    S.costs.splice(insertAfter ? targetIdx + 1 : targetIdx, 0, item);
+    persist(); renderCosts(); recalc();
+  });
+}
+
+// ─── CAD / PLN exchange rate ────────────────────────────────────────────────
+function hasForeignDebts() {
+  return S.debts.some(d => d.type === 'foreign');
+}
+
+function updateRateBar() {
+  const bar = document.getElementById('rate-bar');
+  if (!hasForeignDebts()) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const rate = S.cadRate;
+  const valEl = document.getElementById('rate-val');
+  const ageEl = document.getElementById('rate-age');
+  const manEl = document.getElementById('rate-manual');
+  if (rate) {
+    valEl.textContent = rate.toFixed(4) + ' PLN';
+    if (manEl && !manEl.value) manEl.value = '';
+  } else {
+    valEl.textContent = '—';
+  }
+  if (S.cadRateFetchedAt) {
+    const mins = Math.round((Date.now() - S.cadRateFetchedAt) / 60000);
+    const stale = mins > 60;
+    ageEl.textContent = stale ? `(${mins}m ago — stale)` : `(${mins}m ago)`;
+    ageEl.className = stale ? 'rate-stale' : '';
+  }
+}
+
+async function fetchCadRate(force = false) {
+  const staleMs = 30 * 60 * 1000; // refresh if >30 min old
+  if (!force && S.cadRate && S.cadRateFetchedAt && (Date.now() - S.cadRateFetchedAt) < staleMs) {
+    updateRateBar(); return;
+  }
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/CAD');
+    const data = await res.json();
+    if (data.rates && data.rates.PLN) {
+      S.cadRate = data.rates.PLN;
+      S.cadRateFetchedAt = Date.now();
+      persist();
+      updateRateBar();
+      recalc();
+      toast('CAD rate updated ✓', 'ok');
+    }
+  } catch {
+    toast('Rate fetch failed — set manually', 'err');
+    updateRateBar();
+  }
+}
+
+function setManualRate(val) {
+  const r = parseFloat(val);
+  if (r > 0) {
+    S.cadRate = r;
+    S.cadRateFetchedAt = Date.now();
+    persist();
+    recalc();
+    document.getElementById('rate-val').textContent = r.toFixed(4) + ' PLN';
+  }
+}
+
+const debtSort = { field: null, dir: 1 }; // dir: 1=asc, -1=desc
+
+function sortDebts(field) {
+  if (debtSort.field === field) {
+    debtSort.dir *= -1;
+  } else {
+    debtSort.field = field;
+    debtSort.dir = -1; // default desc (highest first)
+  }
+  renderDebtTable();
+  recalc();
+}
+
+function renderDebtTable() {
+  const tbody = document.getElementById('debt-body');
+  tbody.innerHTML = '';
+
+  // update sort indicators
+  ['balance','min'].forEach(f => {
+    const th = document.getElementById('th-' + f);
+    if (!th) return;
+    th.classList.remove('sort-asc','sort-desc');
+    if (debtSort.field === f) th.classList.add(debtSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+  });
+
+  GROUPS.forEach(g => {
+    let groupDebts = S.debts.map((d,i) => ({d,i})).filter(({d}) => d.type === g.key);
+    if (debtSort.field) {
+      groupDebts = groupDebts.slice().sort((a, b) => {
+        const va = parseFloat(a.d[debtSort.field]) || 0;
+        const vb = parseFloat(b.d[debtSort.field]) || 0;
+        return (va - vb) * debtSort.dir;
+      });
+    }
+    const isForeign = g.key === 'foreign';
+    const rate = S.cadRate || 1;
+    const groupBal = groupDebts.reduce((s,{d}) => s + (parseFloat(d.balance)||0), 0);
+    const groupMin = groupDebts.reduce((s,{d}) => s + (parseFloat(d.min)||0), 0);
+    const groupBalPLN = isForeign ? groupBal * rate : groupBal;
+    const groupMinPLN = isForeign ? groupMin * rate : groupMin;
+
+    // group header row — cells align with columns: handle | name | balance | orig | rate | monthly | months | payoff | del
+    const htr = document.createElement('tr');
+    htr.className = 'group-header' + (collapsed[g.key] ? ' collapsed' : '');
+    htr.dataset.group = g.key;
+    htr.onclick = () => toggleGroup(g.key);
+    const headerBalStr = groupBalPLN > 0 ? fmt(groupBalPLN) : '—';
+    const headerMinStr = groupMinPLN > 0 ? fmt(groupMinPLN) : '—';
+    const cadNote = isForeign && S.cadRate
+      ? `<div style="color:var(--dim);font-size:0.7rem;margin-top:1px">≈${fmtCAD(groupBal)}</div>` : '';
+    htr.innerHTML = `
+      <td></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <span class="group-chevron">▾</span>
+          <span class="group-badge ${g.badge}">${g.label}</span>
+          <span style="color:var(--dim);font-size:0.75rem">${groupDebts.length} item${groupDebts.length!==1?'s':''}</span>
+        </div>
+      </td>
+      <td class="num" style="font-weight:600">${headerBalStr}${cadNote}</td>
+      <td></td><td></td>
+      <td class="num" style="font-weight:600">${headerMinStr}</td>
+      <td></td><td></td><td></td>`;
+    tbody.appendChild(htr);
+
+    // child rows
+    groupDebts.forEach(({d, i}) => {
+      const tr = document.createElement('tr');
+      tr.className = 'group-child' + (collapsed[g.key] ? ' hidden' : '');
+      tr.dataset.group = g.key;
+      const balInp  = numInp(d.balance,  '—', `updateDebt(${i},'balance',this.value)`);
+      const origInp = numInp(d.original, '—', `updateDebt(${i},'original',this.value)`);
+      const rateInp = isForeign ? '<span style="color:var(--dim);font-size:0.82em">CAD</span>'
+                                : numInp(d.rate, d.type==='interest'?'%':'0', `updateDebt(${i},'rate',this.value)`);
+      const minInp  = numInp(d.min, '—', `updateDebt(${i},'min',this.value)`);
+      // for foreign: show CAD balance, PLN equivalent in computed cols
+      const plnBal = isForeign && S.cadRate ? (parseFloat(d.balance)||0) * S.cadRate : null;
+      const balCell = isForeign && plnBal
+        ? `<span style="font-size:0.8em">${balInp}</span><br><span style="color:#A882FF;font-size:0.72em">≈${fmt(plnBal)}</span>`
+        : balInp;
+      tr.innerHTML = `
+        <td class="drag-handle">⠿</td>
+        <td style="padding-left:0.5rem">${inp('left', d.name, 'Name', `updateDebt(${i},'name',this.value)`)}</td>
+        <td class="num">${balCell}</td>
+        <td class="num">${origInp}</td>
+        <td class="num">${rateInp}</td>
+        <td class="num">${minInp}</td>
+        <td class="num computed" id="months-${i}">—</td>
+        <td class="num computed" id="payoff-${i}">—</td>
+        <td><button class="del-btn" onclick="delDebt(${i})" title="Remove">✕</button></td>
+      `;
+      setupDebtDrag(tr, i);
+      tbody.appendChild(tr);
+    });
+
+    // add row inside group
+    const addTr = document.createElement('tr');
+    addTr.className = 'group-child' + (collapsed[g.key] ? ' hidden' : '');
+    addTr.dataset.group = g.key;
+    addTr.innerHTML = `<td colspan="9" style="padding:0.3rem 0.85rem 0.3rem 1.8rem;">
+      <button class="add-row-btn" style="margin:0;padding:0.3rem" onclick="addDebtRow('${g.key}')">${g.addLabel}</button>
+    </td>`;
+    tbody.appendChild(addTr);
+  });
+}
+
+function toggleGroup(key) {
+  collapsed[key] = !collapsed[key];
+  document.querySelectorAll(`tr[data-group="${key}"].group-child`).forEach(tr => {
+    tr.classList.toggle('hidden', collapsed[key]);
+  });
+  const hdr = document.querySelector(`tr.group-header[data-group="${key}"]`);
+  if (hdr) hdr.classList.toggle('collapsed', collapsed[key]);
+}
+
+function inp(cls, val, placeholder, handler) {
+  return `<input class="editable ${cls}" value="${esc(val)}" placeholder="${esc(placeholder)}" oninput="${handler}">`;
+}
+function numInp(val, placeholder, handler) {
+  // type="text" so we control the decimal separator (dot) regardless of browser locale
+  const v = val === '' || val == null ? '' : Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `<input class="editable" type="text" inputmode="decimal" value="${esc(v)}" placeholder="${esc(placeholder)}" oninput="${handler}">`;
+}
+
+function parseNum(raw) {
+  if (raw === '' || raw == null) return '';
+  // strip thousands commas, then parse
+  return parseFloat(String(raw).replace(/,/g, ''));
+}
+function updateDebt(i, field, raw) {
+  const isStr = field === 'name' || field === 'type';
+  S.debts[i][field] = isStr ? raw : parseNum(raw);
+  persist(); recalc();
+}
+function addDebtRow(type = 'interest') {
+  S.debts.push({ name:'', type, balance:'', original:'', rate: type==='interest'?'':0, min:'' });
+  persist(); renderDebtTable(); recalc();
+  if (type === 'foreign' && !S.cadRate) fetchCadRate();
+  // focus the last name input in this group
+  const groupRows = [...document.querySelectorAll(`tr.group-child[data-group="${type}"]`)];
+  const lastData = groupRows.filter(r => r.querySelector('input.left'));
+  if (lastData.length) lastData[lastData.length-1].querySelector('input.left')?.focus();
+}
+function delDebt(i) {
+  if (!confirm(`Remove "${S.debts[i].name || 'this debt'}"?`)) return;
+  S.debts.splice(i, 1);
+  persist(); renderDebtTable(); recalc();
+}
+
+// ─── Fixed costs ───────────────────────────────────────────────────────────
+function renderCosts() {
+  const tbody = document.getElementById('costs-body');
+  tbody.innerHTML = '';
+  (S.costs || []).forEach((c, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="drag-handle">⠿</td>
+      <td>${inp('left', c.name, 'Category', `updateCost(${i},'name',this.value)`)}</td>
+      <td class="num">${numInp(c.amount, '0', `updateCost(${i},'amount',this.value)`)}</td>
+      <td><button class="del-btn" onclick="delCost(${i})">✕</button></td>
+    `;
+    setupCostDrag(tr, i);
+    tbody.appendChild(tr);
+  });
+}
+function updateCost(i, field, val) {
+  S.costs[i][field] = field === 'name' ? val : parseNum(val);
+  persist(); recalc();
+}
+function addCostRow() {
+  if (!S.costs) S.costs = [];
+  S.costs.push({ name:'', amount:'' });
+  persist(); renderCosts(); recalc();
+  const rows = document.querySelectorAll('#costs-body tr');
+  rows[rows.length-1]?.querySelector('input')?.focus();
+}
+function delCost(i) {
+  S.costs.splice(i, 1);
+  persist(); renderCosts(); recalc();
+}
+
+// ─── Log ───────────────────────────────────────────────────────────────────
+function renderLog() {
+  const tbody = document.getElementById('log-body');
+  tbody.innerHTML = '';
+  S.log.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${inp('left', row.month, 'Jun 2026', `updateLog(${i},'month',this.value)`)}</td>
+      <td class="num">${numInp(row.debt,    '—', `updateLog(${i},'debt',this.value)`)}</td>
+      <td class="num">${numInp(row.free,    '—', `updateLog(${i},'free',this.value)`)}</td>
+      <td class="num">${numInp(row.runway,  '—', `updateLog(${i},'runway',this.value)`)}</td>
+      <td class="num">${numInp(row.savings, '—', `updateLog(${i},'savings',this.value)`)}</td>
+      <td>${inp('left', row.notes, 'Notes…', `updateLog(${i},'notes',this.value)`)}</td>
+      <td><button class="del-btn" onclick="delLog(${i})">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+function updateLog(i, field, val) { S.log[i][field] = val; persist(); }
+function addLogRow(prefill = {}) {
+  S.log.unshift({ month: nowLabel(), debt:'', free:'', runway:'', savings:'', notes:'', ...prefill });
+  persist(); renderLog();
+  document.querySelector('#log-body tr input')?.focus();
+}
+function delLog(i) { S.log.splice(i, 1); persist(); renderLog(); }
+
+function snapshotNow() {
+  const prefill = {
+    month:   nowLabel(),
+    debt:    _calc.totalBalance || '',
+    free:    _calc.free != null ? Math.round(_calc.free) : '',
+    runway:  _calc.runway != null ? parseFloat(_calc.runway.toFixed(1)) : '',
+    savings: S.savings || '',
+  };
+  addLogRow(prefill);
+  toast('Snapshot added ✓', 'ok');
+  document.getElementById('log-body').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// ─── Recalc ────────────────────────────────────────────────────────────────
+function recalc() {
+  S.income  = parseNum(document.getElementById('s-income').value)  || 0;
+  S.savings = parseNum(document.getElementById('s-savings').value) || 0;
+  persist();
+
+  updateRateBar();
+  const cadRate = S.cadRate || 0;
+
+  let totalBalance = 0, totalMin = 0;
+  S.debts.forEach((d, i) => {
+    const balRaw = parseFloat(d.balance) || 0;
+    const minRaw = parseFloat(d.min)     || 0;
+    const isForeign = d.type === 'foreign';
+    const bal  = isForeign ? balRaw * cadRate : balRaw;
+    const min  = isForeign ? minRaw * cadRate : minRaw;
+    const debtRate = parseFloat(d.rate) || 0;
+    totalBalance += bal;
+    totalMin     += min;
+    // months calc uses PLN-equivalent values
+    const months = calcMonths(bal, debtRate, min);
+    const mEl = document.getElementById(`months-${i}`);
+    const pEl = document.getElementById(`payoff-${i}`);
+    if (mEl) mEl.textContent = isForeign && !cadRate ? 'set rate' : fmtMo(months);
+    if (pEl) pEl.textContent = isForeign && !cadRate ? '—' : payoffDate(months);
+  });
+
+  document.getElementById('total-balance').textContent = totalBalance > 0 ? fmt(totalBalance) : '—';
+  document.getElementById('total-min').textContent     = totalMin > 0     ? fmt(totalMin)     : '—';
+
+  // fixed costs total
+  const totalCosts = (S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+  document.getElementById('total-costs').textContent = totalCosts > 0 ? fmt(totalCosts) : '—';
+
+  const obligations = totalMin + totalCosts;
+  const free        = S.income > 0 ? S.income - obligations : null;
+  const runway      = obligations > 0 && S.savings > 0 ? S.savings / obligations : null;
+
+  _calc = { totalBalance, totalMin, free, runway };
+
+  document.getElementById('s-debt-payments').textContent  = totalMin > 0    ? fmt(totalMin)    : '—';
+  document.getElementById('s-fixed-costs').textContent    = totalCosts > 0  ? fmt(totalCosts)  : '—';
+  document.getElementById('s-monthly-expenses').textContent = obligations > 0 ? fmt(obligations) : '—';
+
+  const freeEl = document.getElementById('s-free');
+  if (free !== null) {
+    freeEl.textContent  = fmt(free);
+    freeEl.style.color  = free > 2000 ? 'var(--green)' : free > 0 ? 'var(--amber)' : 'var(--coral)';
+  } else { freeEl.textContent = '—'; freeEl.style.color = 'var(--text)'; }
+
+  const runEl = document.getElementById('s-runway');
+  if (runway !== null) {
+    runEl.textContent = fmtMo(runway);
+    runEl.style.color = runway >= 6 ? 'var(--green)' : runway >= 1 ? 'var(--amber)' : 'var(--coral)';
+  } else { runEl.textContent = '—'; runEl.style.color = 'var(--text)'; }
+
+  // payoff progress bars
+  const ppEl = document.getElementById('payoff-progress');
+  const debtRows = S.debts.filter(d => parseFloat(d.balance) > 0 && parseFloat(d.min) > 0);
+  ppEl.innerHTML = '';
+  if (debtRows.length) {
+    debtRows.forEach(d => {
+      const bal  = parseFloat(d.balance);
+      const orig = parseFloat(d.original) || bal;
+      const pct  = orig > 0 ? Math.max(0, Math.min(100, ((orig - bal) / orig) * 100)) : 0;
+      const months = calcMonths(bal, parseFloat(d.rate) || 0, parseFloat(d.min));
+      const item = document.createElement('div');
+      item.className = 'prog-item';
+      item.innerHTML = `
+        <div class="prog-row">
+          <span style="color:var(--text)">${esc(d.name||'Debt')}</span>
+          <span style="color:var(--muted)">${fmtMo(months)}</span>
+        </div>
+        <div class="prog-bar-bg"><div class="prog-bar" style="width:${pct}%"></div></div>
+      `;
+      ppEl.appendChild(item);
+    });
+  } else {
+    ppEl.innerHTML = '<div style="color:var(--dim);font-size:0.85rem;">Fill in balances &amp; payments above.</div>';
+  }
+
+  // ribbon
+  document.getElementById('rib-total-debt').textContent  = totalBalance > 0 ? fmt(totalBalance) : '—';
+  document.getElementById('rib-obligations').textContent = totalMin > 0     ? fmt(totalMin) + '/mo' : '—';
+  const ribFree = document.getElementById('rib-free');
+  if (free !== null) {
+    ribFree.textContent = fmt(free) + '/mo';
+    ribFree.className   = 'val ' + (free > 2000 ? 'good' : free > 0 ? 'warn' : 'danger');
+  } else { ribFree.textContent = '—'; ribFree.className = 'val neutral'; }
+}
+
+// ─── Restore inputs & init ─────────────────────────────────────────────────
+function restoreInputs() {
+  const fmtInp = v => v ? Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+  document.getElementById('s-income').value  = fmtInp(S.income);
+  document.getElementById('s-savings').value = fmtInp(S.savings);
+}
+
+// ─── Markdown renderer (minimal) ───────────────────────────────────────────
+function renderMarkdown(md) {
+  const e = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inline = s => e(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:var(--card2);padding:0.1em 0.3em;border-radius:3px;font-family:monospace">$1</code>');
+
+  const lines = md.split('\n');
+  let html = '', inUL = false, inOL = false, tableRows = [], inTable = false;
+
+  const closeList = () => {
+    if (inUL) { html += '</ul>'; inUL = false; }
+    if (inOL) { html += '</ol>'; inOL = false; }
+  };
+  const flushTable = () => {
+    if (!tableRows.length) return;
+    html += '<table class="ins-table"><tbody>';
+    tableRows.forEach((row, i) => {
+      if (i === 1 && row.every(c => /^-+$/.test(c.trim()))) return; // separator row
+      const tag = i === 0 ? 'th' : 'td';
+      html += '<tr>' + row.map(c => `<${tag}>${inline(c.trim())}</${tag}>`).join('') + '</tr>';
+    });
+    html += '</tbody></table>';
+    tableRows = []; inTable = false;
+  };
+
+  for (const line of lines) {
+    const t = line.trim();
+
+    // table rows
+    if (t.startsWith('|') && t.endsWith('|')) {
+      closeList();
+      inTable = true;
+      tableRows.push(t.slice(1,-1).split('|'));
+      continue;
+    } else if (inTable) { flushTable(); }
+
+    if (t.startsWith('# '))        { closeList(); html += `<h2>${inline(t.slice(2))}</h2>`; }
+    else if (t.startsWith('## '))  { closeList(); html += `<h2>${inline(t.slice(3))}</h2>`; }
+    else if (t.startsWith('### ')) { closeList(); html += `<h3>${inline(t.slice(4))}</h3>`; }
+    else if (t === '---' || t === '***') { closeList(); html += '<hr>'; }
+    else if (t.startsWith('- ') || t.startsWith('* ')) {
+      if (inOL) { html += '</ol>'; inOL = false; }
+      if (!inUL) { html += '<ul>'; inUL = true; }
+      html += `<li>${inline(t.slice(2))}</li>`;
+    } else if (/^\d+\.\s/.test(t)) {
+      if (inUL) { html += '</ul>'; inUL = false; }
+      if (!inOL) { html += '<ol>'; inOL = true; }
+      html += `<li>${inline(t.replace(/^\d+\.\s/,''))}</li>`;
+    } else if (t === '') {
+      closeList();
+    } else {
+      closeList();
+      html += `<p>${inline(t)}</p>`;
+    }
+  }
+  closeList(); flushTable();
+  return html;
+}
+
+// ─── AI Insights ───────────────────────────────────────────────────────────
+const AI_KEY_STORAGE = 'anthropic_key';
+
+function saveApiKey(val) {
+  if (val) localStorage.setItem(AI_KEY_STORAGE, val);
+  else localStorage.removeItem(AI_KEY_STORAGE);
+}
+
+function loadApiKey() {
+  const k = localStorage.getItem(AI_KEY_STORAGE);
+  if (k) document.getElementById('ai-key').value = k;
+}
+
+function buildPrompt(econ = {}) {
+  const cadRate = S.cadRate || 0;
+  const groups = { interest: [], zero: [], mortgage: [], foreign: [] };
+  S.debts.forEach(d => { if (groups[d.type]) groups[d.type].push(d); });
+
+  const fmtN = n => n ? Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+
+  const debtLines = (arr, isForeign) => arr.map(d => {
+    const bal = parseFloat(d.balance) || 0;
+    const min = parseFloat(d.min) || 0;
+    const rate = parseFloat(d.rate) || 0;
+    const balPLN = isForeign && cadRate ? bal * cadRate : bal;
+    const minPLN = isForeign && cadRate ? min * cadRate : min;
+    const months = calcMonths(balPLN, rate, minPLN);
+    const cur = isForeign ? 'CAD' : 'PLN';
+    return `  - ${d.name}: ${fmtN(bal)} ${cur} balance, ${fmtN(min)} ${cur}/mo, ${rate ? rate + '% interest' : '0% interest'}${months ? ', ~' + Math.ceil(months) + ' months left' : ''}`;
+  }).join('\n');
+
+  const totalDebt = S.debts.reduce((s, d) => {
+    const bal = parseFloat(d.balance) || 0;
+    return s + (d.type === 'foreign' && cadRate ? bal * cadRate : bal);
+  }, 0);
+  const totalMin = S.debts.reduce((s, d) => {
+    const min = parseFloat(d.min) || 0;
+    return s + (d.type === 'foreign' && cadRate ? min * cadRate : min);
+  }, 0);
+  const totalCosts = (S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+  const freeCash = S.income ? S.income - totalMin - totalCosts : null;
+
+  const econSection = econ.sources?.length
+    ? `\nLIVE ECONOMIC DATA (use to calibrate Warsaw cost estimates)\n${econ.sources.map(s => `  - ${s}`).join('\n')}${econ.inflationRate ? `\n  - Use ${econ.inflationRate}% inflation to adjust any historical price benchmarks upward` : ''}\n`
+    : '';
+
+  return `You are a practical personal finance advisor specialising in Warsaw, Poland. Here is my current financial situation. Give me clear, specific, actionable advice grounded in current Warsaw prices.
+${econSection}
+FORMATTING RULES (follow exactly):
+- Use ### for section headers (e.g. ### 1. This Month's Budget Split)
+- Use **bold** for key numbers and emphasis
+- Use markdown tables (| Col | Col |) for any budget splits or comparisons
+- Use - bullet points for lists
+- No # or ## headers, no horizontal rules
+- Do not wrap the response in any outer heading like "Your Financial Plan"
+- Start directly with ### 1.
+
+INCOME & SAVINGS
+- Monthly net income: ${fmtN(S.income)} PLN
+- Current savings: ${fmtN(S.savings)} PLN
+- Monthly debt payments: ${fmtN(totalMin)} PLN
+- Monthly fixed costs: ${fmtN(totalCosts)} PLN
+- Free cash after obligations: ${freeCash !== null ? fmtN(freeCash) + ' PLN' : 'unknown (income not set)'}
+
+DEBT BREAKDOWN (total: ${fmtN(totalDebt)} PLN)
+
+Interest loans:
+${debtLines(groups.interest, false) || '  none'}
+
+0% instalments:
+${debtLines(groups.zero, false) || '  none'}
+
+Mortgage:
+${debtLines(groups.mortgage, false) || '  none'}
+
+Foreign debt (CAD, rate: ${cadRate ? cadRate.toFixed(4) + ' PLN/CAD' : 'unknown'}):
+${debtLines(groups.foreign, true) || '  none'}
+
+FIXED MONTHLY COSTS (⚠ = not filled in yet, likely a real expense)
+${(S.costs || []).map(c => {
+    const amt = parseFloat(c.amount);
+    return amt > 0 ? `  - ${c.name}: ${fmtN(amt)} PLN` : `  - ${c.name}: ⚠ not filled in`;
+  }).join('\n') || '  none'}
+
+IMPORTANT CONTEXT
+- My free cash is OVERSTATED. The fixed costs above are incomplete — they only reflect what I've explicitly tracked.
+- I am a person in my late 20s living in Poland. Think about what a real person spends money on that I have NOT listed at all as a category. Common examples: clothing, haircuts/grooming, medical/pharmacy, dining out / bars, coffee, gifts, holidays/travel, car maintenance, home supplies, subscriptions I forgot to list, etc.
+- For each common expense category that is entirely absent from my list, estimate a realistic monthly PLN amount for someone my age in Poland.
+- Subtract your estimated missing expenses from my free cash to get a REALISTIC deployable amount before making any overpayment recommendation.
+- When overpaying I always target reducing the term, not the monthly payment.
+
+Please give me:
+1. **Realistic free cash after hidden costs** — table showing: my stated free cash, then each missing expense category you identified with your PLN estimate, then the realistic remaining amount. Be honest if overpayment room is smaller than it looks.
+2. **Budget split for this month** — table: category | amount | notes. Must add up to realistic free cash. Include savings buffer, overpayment, and discretionary.
+3. **Which debt to overpay and by how much** — based on realistic free cash, not stated free cash.
+4. **Top 2 budget categories to add** — the missing expenses that would most change the plan once tracked properly.
+
+Be direct, use specific PLN amounts, keep it tight.`;
+}
+
+async function fetchEconomicContext() {
+  const ctx = { sources: [] };
+  // World Bank: Poland CPI inflation (annual %)
+  try {
+    const r = await fetch('https://api.worldbank.org/v2/country/PL/indicator/FP.CPI.TOTL.ZG?format=json&mrv=3');
+    const d = await r.json();
+    const rows = (d[1] || []).filter(x => x.value != null);
+    if (rows.length) {
+      ctx.inflationRate = rows[0].value.toFixed(1);
+      ctx.inflationYear = rows[0].date;
+      ctx.sources.push(`Poland CPI inflation: ${ctx.inflationRate}% (${ctx.inflationYear}, World Bank)`);
+    }
+  } catch {}
+  // NBP: current average wages in Poland (series from GUS via NBP)
+  try {
+    const r = await fetch('https://api.nbp.pl/api/cenyzlota/last/1/?format=json');
+    // NBP gold price = rough inflation proxy; also confirms API is reachable
+    const d = await r.json();
+    if (d[0]?.cena) {
+      ctx.goldPLN = d[0].cena;
+      ctx.sources.push(`Gold price PLN: ${ctx.goldPLN} (NBP, ${d[0].data}) — inflation proxy`);
+    }
+  } catch {}
+  // World Bank: Poland GDP per capita (USD) — helps calibrate income context
+  try {
+    const r = await fetch('https://api.worldbank.org/v2/country/PL/indicator/NY.GDP.PCAP.CD?format=json&mrv=1');
+    const d = await r.json();
+    const row = (d[1] || []).find(x => x.value != null);
+    if (row) {
+      ctx.gdpPerCapita = Math.round(row.value);
+      ctx.gdpYear = row.date;
+      ctx.sources.push(`Poland GDP/capita: $${ctx.gdpPerCapita.toLocaleString()} (${ctx.gdpYear}, World Bank)`);
+    }
+  } catch {}
+  return ctx;
+}
+
+async function runInsights() {
+  const key = document.getElementById('ai-key').value.trim();
+  if (!key) { toast('Enter your Anthropic API key first', 'err'); return; }
+
+  const btn = document.getElementById('insights-btn');
+  const out = document.getElementById('insights-output');
+  btn.disabled = true;
+  btn.textContent = '⟳ Fetching economic data…';
+  out.style.display = 'block';
+  out.innerHTML = '<p style="color:var(--dim);font-size:0.82rem">Fetching Warsaw price context…</p>';
+
+  const econ = await fetchEconomicContext();
+
+  btn.textContent = '⟳ Analyzing…';
+  out.innerHTML = '';
+  let accumulated = '';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        stream: true,
+        messages: [{ role: 'user', content: buildPrompt(econ) }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') break;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === 'content_block_delta' && evt.delta?.text) {
+            accumulated += evt.delta.text;
+            out.innerHTML = renderMarkdown(accumulated);
+            out.scrollIntoView({ block: 'nearest' });
+          }
+        } catch {}
+      }
+    }
+    toast('Analysis complete ✓', 'ok');
+  } catch (e) {
+    out.textContent = '⚠ ' + e.message;
+    toast('Analysis failed', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦ Analyze my finances';
+  }
+}
+
+function renderAll() {
+  renderDebtTable();
+  renderCosts();
+  renderLog();
+  restoreInputs();
+  recalc();
+  // fetch fresh rate on page load if there are foreign debts
+  if (hasForeignDebts()) fetchCadRate();
+  loadApiKey();
+}
+
+renderAll();
+</script>
