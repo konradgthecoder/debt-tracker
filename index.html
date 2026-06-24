@@ -240,6 +240,54 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .ins-table th { background: var(--card2); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; }
 .ins-table td { font-variant-numeric: tabular-nums; }
 
+/* ─── Chat ─── */
+.chat-section { display: flex; flex-direction: column; gap: 0.75rem; }
+.chat-memory-toggle {
+  display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim);
+  user-select: none;
+}
+.chat-memory-toggle:hover { color: var(--muted); }
+.chat-memory-area {
+  width: 100%; background: var(--card2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.5rem 0.7rem; color: var(--text); font-family: inherit;
+  font-size: 0.8rem; line-height: 1.5; resize: vertical; min-height: 60px; outline: none;
+}
+.chat-memory-area:focus { border-color: var(--teal); }
+.chat-memory-hint { font-size: 0.7rem; color: var(--dim); }
+.chat-history {
+  display: flex; flex-direction: column; gap: 0.6rem;
+  max-height: 420px; overflow-y: auto; padding: 0.2rem 0;
+}
+.chat-msg {
+  max-width: 88%; padding: 0.5rem 0.85rem; border-radius: 8px; font-size: 0.84rem; line-height: 1.6;
+}
+.chat-msg-user {
+  align-self: flex-end; background: rgba(15,184,160,0.12); border: 1px solid rgba(15,184,160,0.25);
+  color: var(--text);
+}
+.chat-msg-assistant {
+  align-self: flex-start; background: var(--card2); border: 1px solid var(--border);
+  color: var(--text);
+}
+.chat-msg-assistant h3 { font-size: 0.86rem; font-weight: 700; color: var(--teal); margin: 0.7rem 0 0.2rem; }
+.chat-msg-assistant strong { font-weight: 600; }
+.chat-msg-assistant em { color: var(--muted); font-style: italic; }
+.chat-msg-assistant ul { padding-left: 1.1rem; margin: 0.2rem 0; }
+.chat-msg-assistant li { margin: 0.1rem 0; }
+.chat-msg-assistant p { margin: 0.3rem 0; }
+.chat-msg-assistant .ins-table { font-size: 0.8rem; }
+.chat-input-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+.chat-textarea {
+  flex: 1; background: var(--card2); border: 1px solid var(--border2); border-radius: 6px;
+  padding: 0.45rem 0.7rem; color: var(--text); font-family: inherit; font-size: 0.84rem;
+  line-height: 1.4; resize: none; min-height: 38px; max-height: 120px; outline: none;
+}
+.chat-textarea:focus { border-color: var(--teal); }
+.chat-textarea::placeholder { color: var(--dim); }
+.chat-meta { display: flex; justify-content: space-between; align-items: center; }
+.chat-counter { font-size: 0.7rem; color: var(--dim); }
+
 @media (max-width: 620px) {
   .snap-grid { grid-template-columns: 1fr; }
   .ribbon-stats { gap: 1rem; }
@@ -472,6 +520,32 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
       </div>
       <button class="btn btn-primary insights-btn" onclick="runInsights()" id="insights-btn">✦ Analyze my finances</button>
       <div id="insights-output" class="insights-output" style="display:none"></div>
+
+      <div class="chat-section" id="chat-section" style="display:none; border-top: 1px solid var(--border); padding-top: 1rem;">
+        <!-- Memory notes -->
+        <div>
+          <div class="chat-memory-toggle" onclick="toggleMemory()">
+            <span id="memory-arrow">▶</span>
+            <span>Persistent memory</span>
+            <span class="chat-memory-hint" style="margin-left:0.3rem">— facts Claude should always know</span>
+          </div>
+          <div id="memory-panel" style="display:none; margin-top:0.5rem;">
+            <textarea id="memory-notes" class="chat-memory-area" placeholder="e.g. I actually spend ~500 PLN on dining out. My income includes a quarterly bonus of ~5000 PLN. Ignore student loans for now." oninput="saveMemoryNotes(this.value)" rows="3"></textarea>
+            <p class="chat-memory-hint" style="margin-top:0.3rem">Injected into every analysis. Edit freely — Claude reads this on each call.</p>
+          </div>
+        </div>
+        <!-- Conversation history -->
+        <div id="chat-history" class="chat-history"></div>
+        <!-- Input row -->
+        <div class="chat-input-row">
+          <textarea id="chat-input" class="chat-textarea" placeholder="Ask a follow-up or correct something…" rows="1" onkeydown="chatKeydown(event)"></textarea>
+          <button class="btn btn-primary" onclick="sendFollowUp()" id="chat-send-btn" style="white-space:nowrap">Send</button>
+        </div>
+        <div class="chat-meta">
+          <span id="chat-counter" class="chat-counter"></span>
+          <button class="btn btn-ghost" onclick="clearConversation()" style="font-size:0.72rem;padding:0.2rem 0.6rem">Clear conversation</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1138,16 +1212,171 @@ function renderMarkdown(md) {
 }
 
 // ─── AI Insights ───────────────────────────────────────────────────────────
-const AI_KEY_STORAGE = 'anthropic_key';
+const AI_KEY_STORAGE  = 'anthropic_key';
+const CHAT_STORAGE    = 'debt_tracker_chat';
+const MEMORY_STORAGE  = 'debt_tracker_memory';
+const MAX_EXCHANGES   = 10;
+
+let chatHistory = [];
+let memoryNotes = '';
 
 function saveApiKey(val) {
   if (val) localStorage.setItem(AI_KEY_STORAGE, val);
   else localStorage.removeItem(AI_KEY_STORAGE);
 }
-
 function loadApiKey() {
   const k = localStorage.getItem(AI_KEY_STORAGE);
   if (k) document.getElementById('ai-key').value = k;
+}
+function saveChatHistory() {
+  localStorage.setItem(CHAT_STORAGE, JSON.stringify(chatHistory));
+}
+function loadChatHistory() {
+  try { chatHistory = JSON.parse(localStorage.getItem(CHAT_STORAGE) || '[]'); } catch { chatHistory = []; }
+}
+function saveMemoryNotes(val) {
+  memoryNotes = val;
+  localStorage.setItem(MEMORY_STORAGE, val);
+}
+function loadMemoryNotes() {
+  memoryNotes = localStorage.getItem(MEMORY_STORAGE) || '';
+  document.getElementById('memory-notes').value = memoryNotes;
+}
+
+function trimToMaxExchanges(hist) {
+  // Each exchange = 1 user + 1 assistant. Keep last MAX_EXCHANGES pairs.
+  const pairs = [];
+  for (let i = 0; i < hist.length - 1; i++) {
+    if (hist[i].role === 'user' && hist[i+1].role === 'assistant') {
+      pairs.push([hist[i], hist[i+1]]);
+      i++;
+    }
+  }
+  // If there's a trailing user message without a response, keep it
+  const trailing = (hist.length && hist[hist.length-1].role === 'user' && (hist.length < 2 || hist[hist.length-2].role === 'assistant'))
+    ? [hist[hist.length-1]] : [];
+  const kept = pairs.slice(-MAX_EXCHANGES).flat();
+  return [...kept, ...trailing];
+}
+
+function toggleMemory() {
+  const p = document.getElementById('memory-panel');
+  const a = document.getElementById('memory-arrow');
+  const open = p.style.display !== 'none';
+  p.style.display = open ? 'none' : 'block';
+  a.textContent = open ? '▶' : '▼';
+}
+
+function renderChatHistory() {
+  const el = document.getElementById('chat-history');
+  if (!chatHistory.length) { el.innerHTML = ''; updateChatCounter(); return; }
+  el.innerHTML = chatHistory.map(msg => {
+    const cls = msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-assistant';
+    const content = msg.role === 'user'
+      ? esc(msg.content)
+      : renderMarkdown(msg.content);
+    return `<div class="chat-msg ${cls}">${content}</div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+  updateChatCounter();
+}
+
+function updateChatCounter() {
+  const exchanges = chatHistory.filter(m => m.role === 'user').length;
+  const el = document.getElementById('chat-counter');
+  el.textContent = exchanges ? `${exchanges} / ${MAX_EXCHANGES} exchanges in memory` : '';
+}
+
+function clearConversation() {
+  chatHistory = [];
+  saveChatHistory();
+  renderChatHistory();
+  document.getElementById('chat-history').innerHTML = '';
+  document.getElementById('chat-section').style.display = 'none';
+  document.getElementById('insights-output').style.display = 'none';
+  document.getElementById('insights-output').innerHTML = '';
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendFollowUp(); }
+}
+
+async function streamToElement(key, messages, outputEl, appendToEl) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4096, stream: true, messages }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '', accumulated = '';
+  let msgEl = null;
+  if (appendToEl) {
+    msgEl = document.createElement('div');
+    msgEl.className = 'chat-msg chat-msg-assistant';
+    appendToEl.appendChild(msgEl);
+  }
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') break;
+      try {
+        const evt = JSON.parse(data);
+        if (evt.type === 'content_block_delta' && evt.delta?.text) {
+          accumulated += evt.delta.text;
+          if (outputEl) { outputEl.innerHTML = renderMarkdown(accumulated); }
+          if (msgEl)    { msgEl.innerHTML = renderMarkdown(accumulated); appendToEl.scrollTop = appendToEl.scrollHeight; }
+        }
+      } catch {}
+    }
+  }
+  return accumulated;
+}
+
+async function sendFollowUp() {
+  const key = document.getElementById('ai-key').value.trim();
+  if (!key) { toast('Enter your Anthropic API key first', 'err'); return; }
+  const inputEl = document.getElementById('chat-input');
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  inputEl.value = '';
+  const btn = document.getElementById('chat-send-btn');
+  btn.disabled = true;
+
+  chatHistory.push({ role: 'user', content: text });
+  chatHistory = trimToMaxExchanges(chatHistory);
+  renderChatHistory();
+
+  try {
+    const histEl = document.getElementById('chat-history');
+    const accumulated = await streamToElement(key, chatHistory, null, histEl);
+    chatHistory.push({ role: 'assistant', content: accumulated });
+    chatHistory = trimToMaxExchanges(chatHistory);
+    saveChatHistory();
+    updateChatCounter();
+  } catch (e) {
+    toast('Chat failed: ' + e.message, 'err');
+    chatHistory.pop();
+    renderChatHistory();
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function buildPrompt(econ = {}) {
@@ -1289,54 +1518,23 @@ async function runInsights() {
 
   btn.textContent = '⟳ Analyzing…';
   out.innerHTML = '';
-  let accumulated = '';
+
+  const snapshotContent = buildPrompt(econ)
+    + (memoryNotes.trim() ? `\n\nPERSONAL MEMORY NOTES (I have previously told you):\n${memoryNotes.trim()}` : '');
+
+  // Fresh analysis always starts from the snapshot, then replays prior history
+  const messages = [{ role: 'user', content: snapshotContent }, ...chatHistory];
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        stream: true,
-        messages: [{ role: 'user', content: buildPrompt(econ) }],
-      }),
-    });
+    const accumulated = await streamToElement(key, messages, out, null);
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
+    chatHistory.push({ role: 'user',      content: snapshotContent });
+    chatHistory.push({ role: 'assistant', content: accumulated      });
+    chatHistory = trimToMaxExchanges(chatHistory);
+    saveChatHistory();
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') break;
-        try {
-          const evt = JSON.parse(data);
-          if (evt.type === 'content_block_delta' && evt.delta?.text) {
-            accumulated += evt.delta.text;
-            out.innerHTML = renderMarkdown(accumulated);
-            out.scrollIntoView({ block: 'nearest' });
-          }
-        } catch {}
-      }
-    }
+    document.getElementById('chat-section').style.display = 'flex';
+    renderChatHistory();
     toast('Analysis complete ✓', 'ok');
   } catch (e) {
     out.textContent = '⚠ ' + e.message;
@@ -1353,9 +1551,15 @@ function renderAll() {
   renderLog();
   restoreInputs();
   recalc();
-  // fetch fresh rate on page load if there are foreign debts
   if (hasForeignDebts()) fetchCadRate();
   loadApiKey();
+  loadChatHistory();
+  loadMemoryNotes();
+  if (chatHistory.length) {
+    document.getElementById('insights-output').style.display = 'none';
+    document.getElementById('chat-section').style.display = 'flex';
+    renderChatHistory();
+  }
 }
 
 renderAll();
