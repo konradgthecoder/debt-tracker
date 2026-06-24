@@ -5,15 +5,19 @@ Personal finance tracker — debts, fixed costs, monthly snapshot, and AI-powere
 ## Files
 
 ```
-index.html              — open this in Chrome, no server needed
-data/import.json        — full debt/costs dataset, re-import after edits here
+index.html              — open this in a browser, no server needed
+data/import.sample.json — example dataset to import (placeholder numbers)
+data/import.json        — your real data (git-ignored, never published)
 skills/financial-advisor.md  — AI insights prompt, edit to tune advisor behaviour
 ```
+
+> **Privacy:** your real financial data lives only in your browser's `localStorage`
+> and in a git-ignored `data/import.json`. It is never committed or published.
 
 ## Usage
 
 1. Open `index.html` in Chrome
-2. Hit **↑ Import** and select `data/import.json` to load your data
+2. Hit **↑ Import** and select your data file (start from `data/import.sample.json`)
 3. Edit balances directly in the table as you make payments
 4. Hit **📸 Snapshot now** monthly to log your progress
 5. Scroll to **AI Insights**, paste your Anthropic API key, hit **✦ Analyze**

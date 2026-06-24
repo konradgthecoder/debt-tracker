@@ -1,0 +1,19 @@
+{
+  "debts": [
+    { "name": "Credit Card",            "type": "interest", "balance": 5000,   "original": 5000,   "rate": 14.5, "min": "" },
+    { "name": "Car Loan",               "type": "interest", "balance": 20000,  "original": 25000,  "rate": 8.5,  "min": 600 },
+    { "name": "Phone instalment",       "type": "zero",     "balance": 2000,   "original": 3000,   "rate": 0,    "min": 200 },
+    { "name": "Mortgage",               "type": "mortgage", "balance": 250000, "original": 280000, "rate": 5.5,  "min": 1500 },
+    { "name": "Foreign Loan (CAD)",     "type": "foreign",  "balance": 4000,   "original": 5000,   "rate": 6.0,  "min": 200 }
+  ],
+  "costs": [
+    { "name": "Groceries & food",           "amount": 2000 },
+    { "name": "Utilities (water, heating)", "amount": 350 },
+    { "name": "Electricity",                "amount": 60 },
+    { "name": "Internet",                   "amount": 80 },
+    { "name": "Phone",                      "amount": 50 }
+  ],
+  "income": 10000,
+  "savings": 5000,
+  "log": []
+}

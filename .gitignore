@@ -1,2 +1,5 @@
 .DS_Store
 *.local
+
+# personal financial data — never publish
+data/import.json
