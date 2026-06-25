@@ -593,10 +593,13 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
     padding: 0.2rem 0; cursor: pointer;
   }
   /* surface the group's balance + interest subtotals under the badge */
-  .table-wrap tr.group-header td.num { display: block; padding: 0; }
+  .table-wrap tr.group-header td.num {
+    display: flex; justify-content: space-between; gap: 0.75rem;
+    padding: 0.15rem 0.85rem; flex-wrap: wrap;
+  }
   .table-wrap tr.group-header td.num:empty { display: none; }
   .table-wrap tr.group-header td.num::before {
-    content: attr(data-label) ': '; color: var(--dim);
+    content: attr(data-label) ':'; color: var(--dim); flex: 0 0 auto;
   }
 
   /* each debt / cost child becomes a card */
@@ -623,7 +626,7 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   /* labeled field rows */
   .table-wrap tr.group-child td[data-label] {
     display: flex; align-items: center; justify-content: space-between;
-    gap: 0.75rem; padding: 0.28rem 0; text-align: right;
+    gap: 0.75rem; padding: 0.28rem 0; text-align: right; flex-wrap: wrap;
   }
   .table-wrap tr.group-child td[data-label]::before {
     content: attr(data-label); color: var(--muted);
@@ -638,8 +641,8 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
     border-top: 1px solid var(--border); text-align: right;
   }
   .table-wrap td.cell-del .del-btn { opacity: 0.6; }
-  /* the foreign "≈ PLN" subline stays under its value */
-  .table-wrap tr.group-child td .cad-pln { width: 100%; text-align: right; }
+  /* the foreign "≈ PLN/CAD" subline wraps to its own full-width line under the value */
+  .table-wrap .cad-pln { flex: 1 0 100%; width: 100%; text-align: right; margin-top: 0.1rem; }
 
   /* add-row: not a card, just the dashed button */
   .table-wrap tr.add-tr {
