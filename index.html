@@ -1955,6 +1955,7 @@ function recalc() {
 
   renderProjection();
   renderAllocation();
+  drawSavingsGrowth();   // keep the Savings-growth tab live (goal/APY/inflation/savings changes)
 }
 
 // ─── Collapsible sections (per-device UI pref, not synced) ──────────────────
@@ -2010,9 +2011,9 @@ function renderSavings(runway, obligations, free) {
   if (runway !== null) { runEl.textContent = fmtMo(runway); runEl.style.color = runway >= efMonths ? 'var(--green)' : runway >= 1 ? 'var(--amber)' : 'var(--coral)'; }
   else { runEl.textContent = '—'; runEl.style.color = 'var(--text)'; }
 
-  // savings rate = free cash as a share of income (capacity to save/overpay)
+  // savings rate = your monthly savings goal as a share of income (what you commit to saving)
   const rateEl = document.getElementById('s-savrate');
-  if (S.income > 0 && free != null) { const r = Math.max(0, free) / S.income; rateEl.textContent = Math.round(r * 100) + '%'; rateEl.style.color = r >= 0.2 ? 'var(--green)' : r > 0 ? 'var(--amber)' : 'var(--coral)'; }
+  if (S.income > 0) { const r = (projState.savingsGoal || 0) / S.income; rateEl.textContent = Math.round(r * 100) + '%'; rateEl.style.color = r >= 0.2 ? 'var(--green)' : r > 0 ? 'var(--amber)' : 'var(--muted)'; }
   else { rateEl.textContent = '—'; rateEl.style.color = 'var(--text)'; }
 
   document.getElementById('s-outgoings-note').textContent = obligations > 0 ? `· based on ${fmt(obligations)}/mo outgoings` : '';
@@ -2029,7 +2030,12 @@ function renderSavings(runway, obligations, free) {
     else if (goal > 0) { tier = 'Funding your savings goal'; next = anyDebt ? 'overpay low-rate debt' : 'keep investing'; }
     else { tier = anyDebt ? 'Overpaying low-rate debt' : 'Debt-free — keep saving'; next = null; }
     const parNote = goal > 0 && projState.parallel ? ' <span class="sv-next">(+ saving goal in parallel)</span>' : '';
-    hereEl.innerHTML = `Right now: <span class="sv-tier">${tier}</span>${parNote}${next ? ` <span class="sv-next">· next: ${next}</span>` : ''}`;
+    let html = `Right now: <span class="sv-tier">${tier}</span>${parNote}${next ? ` <span class="sv-next">· next: ${next}</span>` : ''}`;
+    // the waterfall only moves if there's discretionary cash assigned in the Simulator
+    if ((projState.extra || 0) <= 0 && (anyDebt || savings < fullTgt - 0.005 || goal > 0)) {
+      html += `<div class="ratio-note" style="margin-top:0.4rem;color:var(--amber)">⚠ No monthly cash assigned yet — set <strong>Extra / mo</strong> in the Simulator tab to fund your buffer, debt overpayment and savings goal. Until then this plan and the parallel toggle have nothing to allocate.</div>`;
+    }
+    hereEl.innerHTML = html;
   }
 
   // progress bars: starter buffer + full emergency fund
