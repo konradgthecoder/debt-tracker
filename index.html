@@ -31,6 +31,27 @@
   --dim:    #3A5878;
   --green:  #22C99A;
 }
+@media (prefers-color-scheme: light) {
+  :root {
+    --navy:   #EEF2F7;
+    --card:   #FFFFFF;
+    --card2:  #F1F5FA;
+    --border: #DDE4EE;
+    --border2:#C7D2E0;
+    --teal:   #0A9C88;
+    --amber:  #B0730A;
+    --coral:  #DA3A50;
+    --text:   #15233A;
+    --muted:  #5A6E88;
+    --dim:    #93A3B8;
+    --green:  #0C9E6C;
+  }
+  /* lighter scrollbars + subtle elevation so white cards read against the page */
+  * { scrollbar-color: #C7D2E0 transparent; }
+  ::-webkit-scrollbar-thumb { background: #C7D2E0; }
+  ::-webkit-scrollbar-thumb:hover { background: #AEBCCE; }
+  .snap-card, .insights-wrap, .proj-wrap, .table-wrap, .modal { box-shadow: 0 1px 3px rgba(21,35,58,0.06); }
+}
 body {
   background: var(--navy); color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -923,6 +944,8 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// read a CSS custom property so canvas drawing follows the light/dark theme
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888'; }
 function nowLabel() {
   const d = new Date();
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
@@ -1887,12 +1910,12 @@ function drawAllocDonut(hover) {
     const s = shown[hover];
     ctx.fillStyle = s.color; ctx.font = `700 ${size > 170 ? 18 : 15}px -apple-system, sans-serif`;
     ctx.fillText(Math.round((s.value / total) * 100) + '%', cx, cy - 7);
-    ctx.fillStyle = '#6B8BAD'; ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillStyle = cssVar('--muted'); ctx.font = '9px -apple-system, sans-serif';
     ctx.fillText(fmt(s.value).replace(' PLN', ''), cx, cy + 9);
   } else {
-    ctx.fillStyle = '#E8F0F8'; ctx.font = `700 ${size > 170 ? 19 : 15}px -apple-system, sans-serif`;
+    ctx.fillStyle = cssVar('--text'); ctx.font = `700 ${size > 170 ? 19 : 15}px -apple-system, sans-serif`;
     ctx.fillText(Math.round(total / 1000) + 'k', cx, cy - 6);
-    ctx.fillStyle = '#6B8BAD'; ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillStyle = cssVar('--muted'); ctx.font = '9px -apple-system, sans-serif';
     ctx.fillText(free != null ? 'income' : 'outflow', cx, cy + 9);
   }
 }
@@ -2285,20 +2308,24 @@ function drawChart(sim) {
   const padL = 54, padR = 12, padT = 14, padB = 26;
   const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
 
+  // theme-aware colors (follow light/dark)
+  const cGrid = cssVar('--border'), cLabel = cssVar('--muted'), cDim = cssVar('--dim'),
+        cDiv = cssVar('--border2'), cTeal = cssVar('--teal');
+
   if (!sim || !sim.series.length) {
-    ctx.fillStyle = '#3A5878'; ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = cDim; ctx.font = '13px -apple-system, sans-serif';
     ctx.fillText('Add debts to see the projection.', padL, padT + plotH / 2);
     return;
   }
 
   const drawGrid = (maxBal, endLabel) => {
-    ctx.strokeStyle = '#1C3550'; ctx.lineWidth = 1; ctx.fillStyle = '#6B8BAD'; ctx.font = '10px -apple-system, sans-serif';
+    ctx.strokeStyle = cGrid; ctx.lineWidth = 1; ctx.fillStyle = cLabel; ctx.font = '10px -apple-system, sans-serif';
     for (let g = 0; g <= 4; g++) {
       const v = maxBal * (1 - g / 4), y = padT + (plotH * g / 4);
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(cssW - padR, y); ctx.stroke();
       ctx.fillText(Math.round(v / 1000) + 'k', 6, y + 3);
     }
-    if (endLabel) { ctx.fillStyle = '#6B8BAD'; ctx.fillText(endLabel, cssW - padR - 54, cssH - 8); }
+    if (endLabel) { ctx.fillStyle = cLabel; ctx.fillText(endLabel, cssW - padR - 54, cssH - 8); }
   };
 
   // ─── Plan-anchored view: x-axis is months since plan was locked ───
@@ -2328,20 +2355,20 @@ function drawChart(sim) {
 
     // "now" divider
     const nowX = xAt(elapsed);
-    ctx.strokeStyle = '#254567'; ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = cDiv; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(nowX, padT); ctx.lineTo(nowX, padT + plotH); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#3A5878'; ctx.fillText('now', nowX + 3, padT + 10);
+    ctx.fillStyle = cDim; ctx.fillText('now', nowX + 3, padT + 10);
 
     // locked plan (grey dashed)
     ctx.beginPath();
     visPlan.forEach((v, mo) => { const x = xAt(mo), y = yAt(v); mo ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.strokeStyle = '#6B8BAD'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = cLabel; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
 
     // updated forecast from now (teal)
     ctx.beginPath();
     liveSeries.forEach((v, i) => { const mo = elapsed + i; if (mo > cutoff) return; const x = xAt(mo), y = yAt(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.strokeStyle = '#0FB8A0'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = cTeal; ctx.lineWidth = 2; ctx.stroke();
 
     // projected savings (green) — savings starts at "now" and rises
     if (savProj) {
@@ -2374,14 +2401,14 @@ function drawChart(sim) {
   drawGrid(maxBal, monthsToDate(cutoff));
 
   const nowX = xAt(past.length);
-  ctx.strokeStyle = '#254567'; ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = cDiv; ctx.setLineDash([3, 3]);
   ctx.beginPath(); ctx.moveTo(nowX, padT); ctx.lineTo(nowX, padT + plotH); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = '#3A5878'; ctx.fillText('now', nowX + 3, padT + 10);
+  ctx.fillStyle = cDim; ctx.fillText('now', nowX + 3, padT + 10);
 
   ctx.beginPath();
   series.forEach((v, i) => { const x = xAt(past.length + i), y = yAt(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-  ctx.strokeStyle = '#0FB8A0'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = cTeal; ctx.lineWidth = 2; ctx.stroke();
   ctx.lineTo(xAt(past.length + series.length - 1), padT + plotH);
   ctx.lineTo(nowX, padT + plotH); ctx.closePath();
   ctx.fillStyle = 'rgba(15,184,160,0.10)'; ctx.fill();
