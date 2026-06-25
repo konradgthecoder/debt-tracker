@@ -343,7 +343,7 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .chat-memory-hint { font-size: 0.7rem; color: var(--dim); }
 .chat-history {
   display: flex; flex-direction: column; gap: 0.6rem;
-  max-height: 420px; overflow-y: auto; padding: 0.2rem 0;
+  max-height: 620px; overflow-y: auto; padding: 0.2rem 0;
 }
 .chat-msg {
   max-width: 88%; padding: 0.5rem 0.85rem; border-radius: 8px; font-size: 0.84rem; line-height: 1.6;
@@ -352,8 +352,10 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   align-self: flex-end; background: rgba(15,184,160,0.12); border: 1px solid rgba(15,184,160,0.25);
   color: var(--text);
 }
+/* assistant answers are the focus — full width */
 .chat-msg-assistant {
-  align-self: flex-start; background: var(--card2); border: 1px solid var(--border);
+  align-self: stretch; max-width: 100%;
+  background: var(--card2); border: 1px solid var(--border);
   color: var(--text);
 }
 .chat-msg-assistant h3 { font-size: 0.86rem; font-weight: 700; color: var(--teal); margin: 0.7rem 0 0.2rem; }
@@ -375,9 +377,6 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .chat-earlier-body { display: none; flex-direction: column; gap: 0.6rem; padding-bottom: 0.6rem; }
 .chat-earlier.open .chat-earlier-body { display: flex; }
 .chat-earlier.open .cu-chevron { transform: rotate(90deg); }
-/* keep AI prose at a readable measure; wide tables still scroll inside */
-.chat-msg-assistant { max-width: min(94%, 760px); }
-.insights-output { max-width: 760px; }
 .chat-input-row { display: flex; gap: 0.5rem; align-items: flex-end; }
 .chat-textarea {
   flex: 1; background: var(--card2); border: 1px solid var(--border2); border-radius: 6px;
@@ -959,8 +958,27 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <div id="insights-output" class="insights-output" style="display:none"></div>
 
       <div class="chat-section" id="chat-section" style="display:none; border-top: 1px solid var(--border); padding-top: 1rem;">
-        <!-- Memory notes -->
-        <div>
+        <!-- Conversation (newest in focus) — sits right under Analyze -->
+        <div id="chat-history" class="chat-history"></div>
+        <!-- Input row -->
+        <div class="chat-input-row">
+          <textarea id="chat-input" class="chat-textarea" placeholder="Ask a follow-up or correct something…" rows="1" onkeydown="chatKeydown(event)"></textarea>
+          <button class="btn btn-primary" onclick="sendFollowUp()" id="chat-send-btn" style="white-space:nowrap">Send</button>
+        </div>
+        <!-- Suggested follow-ups -->
+        <div class="ai-chips" id="ai-chips">
+          <button class="ai-chip" onclick="useChip(this)">Is my simulated overpayment realistic?</button>
+          <button class="ai-chip" onclick="useChip(this)">Should I build savings before overpaying?</button>
+          <button class="ai-chip" onclick="useChip(this)">Which debt do I attack after the credit cards?</button>
+          <button class="ai-chip" onclick="useChip(this)">What if I cut dining to 300/mo?</button>
+          <button class="ai-chip" onclick="useChip(this)">What if I get a 10% raise?</button>
+        </div>
+        <div class="chat-meta">
+          <span id="chat-counter" class="chat-counter"></span>
+          <button class="btn btn-ghost" onclick="clearConversation()" style="font-size:0.72rem;padding:0.2rem 0.6rem">Clear conversation</button>
+        </div>
+        <!-- Persistent memory — least-used, kept at the bottom -->
+        <div style="border-top:1px solid var(--border); padding-top:0.8rem">
           <div class="chat-memory-toggle" onclick="toggleMemory()">
             <span id="memory-arrow">▶</span>
             <span>Persistent memory</span>
@@ -973,25 +991,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
               Claude reads it on every Analyze and every chat message.
             </p>
           </div>
-        </div>
-        <!-- Suggested follow-ups -->
-        <div class="ai-chips" id="ai-chips">
-          <button class="ai-chip" onclick="useChip(this)">Is my simulated overpayment realistic?</button>
-          <button class="ai-chip" onclick="useChip(this)">Should I build savings before overpaying?</button>
-          <button class="ai-chip" onclick="useChip(this)">Which debt do I attack after the credit cards?</button>
-          <button class="ai-chip" onclick="useChip(this)">What if I cut dining to 300/mo?</button>
-          <button class="ai-chip" onclick="useChip(this)">What if I get a 10% raise?</button>
-        </div>
-        <!-- Conversation history -->
-        <div id="chat-history" class="chat-history"></div>
-        <!-- Input row -->
-        <div class="chat-input-row">
-          <textarea id="chat-input" class="chat-textarea" placeholder="Ask a follow-up or correct something…" rows="1" onkeydown="chatKeydown(event)"></textarea>
-          <button class="btn btn-primary" onclick="sendFollowUp()" id="chat-send-btn" style="white-space:nowrap">Send</button>
-        </div>
-        <div class="chat-meta">
-          <span id="chat-counter" class="chat-counter"></span>
-          <button class="btn btn-ghost" onclick="clearConversation()" style="font-size:0.72rem;padding:0.2rem 0.6rem">Clear conversation</button>
         </div>
       </div>
     </div>
