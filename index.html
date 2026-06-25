@@ -260,6 +260,18 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .ratio-bar { height: 100%; border-radius: 5px; transition: width 0.3s; }
 .ratio-bench { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); opacity: 0.5; }
 .ratio-note { font-size: 0.7rem; color: var(--dim); }
+.sv-here { font-size: 0.82rem; color: var(--text); margin: 0.2rem 0 0.7rem; line-height: 1.45; }
+.sv-here .sv-tier { font-weight: 700; color: var(--teal); }
+.sv-here .sv-next { color: var(--muted); }
+.sv-bar { margin: 0.55rem 0; }
+.sv-bar-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.78rem; margin-bottom: 0.25rem; }
+.sv-bar-head .nm { color: var(--muted); }
+.sv-bar-head .amt { color: var(--text); font-variant-numeric: tabular-nums; }
+.sv-bar-bg { height: 8px; background: var(--card2); border-radius: 5px; overflow: hidden; }
+.sv-bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; }
+.sv-bar.done .sv-bar-head .amt { color: var(--green); }
+.sv-targets { display: flex; gap: 1.1rem; flex-wrap: wrap; margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid var(--border); font-size: 0.74rem; color: var(--muted); }
+.sv-mini { width: 38px; text-align: center; padding: 0.1rem 0.2rem; margin: 0 0.15rem; }
 .snap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
 .snap-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: 0.9rem; }
 .snap-row .key { color: var(--muted); }
@@ -743,28 +755,36 @@ html, body { max-width: 100%; overflow-x: hidden; }
         <div class="snap-label">Savings &amp; emergency fund</div>
         <div class="snap-rows">
           <div class="snap-row">
-            <span class="key">Current savings / buffer</span>
-            <span class="amt"><input class="editable" id="s-savings" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()" onblur="reformatNum(this);recalc()"></span>
+            <span class="key">Current savings</span>
+            <span class="amt"><input class="editable" id="s-savings" type="text" inputmode="decimal" placeholder="0.00" style="font-weight:700;color:var(--green)" oninput="recalc()" onblur="reformatNum(this);recalc()"></span>
           </div>
           <div class="snap-row">
-            <span class="key">Total monthly outgoings</span>
-            <span class="amt" id="s-monthly-expenses" style="color:var(--muted)">—</span>
+            <span class="key">Monthly savings goal</span>
+            <span class="amt"><input class="editable" id="s-goal" type="text" inputmode="decimal" placeholder="0.00" style="text-align:right" oninput="onSavingsGoal(this.value)" onblur="reformatNum(this)"></span>
           </div>
           <div class="snap-row">
-            <span class="key">Emergency fund target
-              <input class="editable" id="s-ef-months" type="text" inputmode="decimal" value="6"
-                     style="width:34px;text-align:center;padding:0.1rem 0.2rem;margin:0 0.2rem" oninput="onEfMonths(this.value)"> mo</span>
-            <span class="amt" id="s-ef-target" style="color:var(--muted)">—</span>
+            <span class="key"><label style="cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem"><input type="checkbox" id="s-parallel" onchange="onParallelToggle(this.checked)" style="width:auto"> Fund goal in parallel with debt</label></span>
+            <span class="amt" id="s-parallel-cost" style="color:var(--dim);font-size:0.72rem"></span>
           </div>
+
+          <div class="snap-divider"></div>
+          <div class="sv-here" id="savings-here">Set your income to see your savings plan.</div>
+          <div id="savings-bars"></div>
+
           <div class="snap-divider"></div>
           <div class="snap-total-row">
             <span class="snap-total-key">🛟 Runway</span>
             <span class="snap-total-val" id="s-runway">—</span>
           </div>
           <div class="snap-total-row">
-            <span class="snap-total-key" id="s-ef-gap-key">🎯 Fund gap</span>
-            <span class="snap-total-val" id="s-ef-gap">—</span>
+            <span class="snap-total-key">📈 Savings rate</span>
+            <span class="snap-total-val" id="s-savrate">—</span>
           </div>
+        </div>
+        <div class="sv-targets">
+          <span>Starter buffer <input class="editable sv-mini" id="s-starter-months" type="text" inputmode="decimal" value="1" oninput="onStarterMonths(this.value)"> mo</span>
+          <span>Full emergency fund <input class="editable sv-mini" id="s-ef-months" type="text" inputmode="decimal" value="6" oninput="onEfMonths(this.value)"> mo</span>
+          <span id="s-outgoings-note"></span>
         </div>
       </div>
 
@@ -1853,7 +1873,6 @@ function recalc() {
 
   document.getElementById('s-debt-payments').textContent  = totalMin > 0    ? fmt(totalMin)    : '—';
   document.getElementById('s-fixed-costs').textContent    = totalCosts > 0  ? fmt(totalCosts)  : '—';
-  document.getElementById('s-monthly-expenses').textContent = obligations > 0 ? fmt(obligations) : '—';
 
   const freeEl = document.getElementById('s-free');
   if (free !== null) {
@@ -1861,36 +1880,7 @@ function recalc() {
     freeEl.style.color  = free > 2000 ? 'var(--green)' : free > 0 ? 'var(--amber)' : 'var(--coral)';
   } else { freeEl.textContent = '—'; freeEl.style.color = 'var(--text)'; }
 
-  const efMonths = projState.efMonths || 0;
-  const runEl = document.getElementById('s-runway');
-  if (runway !== null) {
-    runEl.textContent = fmtMo(runway);
-    runEl.style.color = runway >= efMonths ? 'var(--green)' : runway >= 1 ? 'var(--amber)' : 'var(--coral)';
-  } else { runEl.textContent = '—'; runEl.style.color = 'var(--text)'; }
-
-  // emergency fund target & gap
-  const efTgt = obligations * efMonths;
-  const savingsNow = parseFloat(S.savings) || 0;
-  const efTgtEl = document.getElementById('s-ef-target');
-  const efGapEl = document.getElementById('s-ef-gap');
-  const efGapKey = document.getElementById('s-ef-gap-key');
-  if (efTgt > 0) {
-    efTgtEl.textContent = fmt(efTgt);
-    const gap = efTgt - savingsNow;
-    if (gap > 0) {
-      efGapKey.textContent = '🎯 Fund gap';
-      efGapEl.textContent = fmt(gap);
-      efGapEl.style.color = 'var(--amber)';
-    } else {
-      efGapKey.textContent = '🎯 Fund';
-      efGapEl.textContent = 'fully funded ✓';
-      efGapEl.style.color = 'var(--green)';
-    }
-  } else {
-    efTgtEl.textContent = '—';
-    efGapEl.textContent = '—'; efGapEl.style.color = 'var(--text)';
-    efGapKey.textContent = '🎯 Fund gap';
-  }
+  renderSavings(runway, obligations, free);
 
   // payoff progress bars
   const ppEl = document.getElementById('payoff-progress');
@@ -1959,6 +1949,80 @@ function initSections() {
     }
     if (st[key]) sec.classList.add('collapsed');
   });
+}
+
+// ─── Savings & emergency fund card ──────────────────────────────────────────
+function renderSavings(runway, obligations, free) {
+  // sync inputs from state (don't fight the user's cursor)
+  const sync = (id, val) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = val; };
+  sync('s-goal', projState.savingsGoal ? Number(projState.savingsGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+  sync('s-starter-months', projState.starterMonths);
+  sync('s-ef-months', projState.efMonths);
+  const par = document.getElementById('s-parallel'); if (par) par.checked = !!projState.parallel;
+
+  const savings = parseFloat(S.savings) || 0;
+  const starterTgt = obligations * (projState.starterMonths || 0);
+  const fullTgt = obligations * (projState.efMonths || 0);
+  const goal = projState.savingsGoal || 0;
+  const hiDebt = projDebts().some(d => d.rate >= HI_RATE && d.bal > 0.005);
+  const anyDebt = projDebts().some(d => d.bal > 0.005);
+
+  // runway
+  const efMonths = projState.efMonths || 0;
+  const runEl = document.getElementById('s-runway');
+  if (runway !== null) { runEl.textContent = fmtMo(runway); runEl.style.color = runway >= efMonths ? 'var(--green)' : runway >= 1 ? 'var(--amber)' : 'var(--coral)'; }
+  else { runEl.textContent = '—'; runEl.style.color = 'var(--text)'; }
+
+  // savings rate = free cash as a share of income (capacity to save/overpay)
+  const rateEl = document.getElementById('s-savrate');
+  if (S.income > 0 && free != null) { const r = Math.max(0, free) / S.income; rateEl.textContent = Math.round(r * 100) + '%'; rateEl.style.color = r >= 0.2 ? 'var(--green)' : r > 0 ? 'var(--amber)' : 'var(--coral)'; }
+  else { rateEl.textContent = '—'; rateEl.style.color = 'var(--text)'; }
+
+  document.getElementById('s-outgoings-note').textContent = obligations > 0 ? `· based on ${fmt(obligations)}/mo outgoings` : '';
+
+  // "you're here" — current waterfall tier
+  const hereEl = document.getElementById('savings-here');
+  if (!(fullTgt > 0) && !(goal > 0) && !(starterTgt > 0)) {
+    hereEl.innerHTML = 'Set an emergency-fund target and (optionally) a monthly savings goal to build your plan.';
+  } else {
+    let tier, next;
+    if (savings < starterTgt - 0.005) { tier = 'Building your starter buffer'; next = hiDebt ? 'kill high-interest debt' : 'top up the full emergency fund'; }
+    else if (hiDebt) { tier = 'Attacking high-interest debt'; next = 'top up the full emergency fund'; }
+    else if (savings < fullTgt - 0.005) { tier = 'Topping up your emergency fund'; next = goal > 0 ? 'fund your savings goal' : 'overpay remaining debt'; }
+    else if (goal > 0) { tier = 'Funding your savings goal'; next = anyDebt ? 'overpay low-rate debt' : 'keep investing'; }
+    else { tier = anyDebt ? 'Overpaying low-rate debt' : 'Debt-free — keep saving'; next = null; }
+    const parNote = goal > 0 && projState.parallel ? ' <span class="sv-next">(+ saving goal in parallel)</span>' : '';
+    hereEl.innerHTML = `Right now: <span class="sv-tier">${tier}</span>${parNote}${next ? ` <span class="sv-next">· next: ${next}</span>` : ''}`;
+  }
+
+  // progress bars: starter buffer + full emergency fund
+  const bar = (name, cur, tgt, color) => {
+    if (!(tgt > 0)) return '';
+    const pct = Math.max(0, Math.min(100, (cur / tgt) * 100));
+    const done = cur >= tgt - 0.005;
+    return `<div class="sv-bar${done ? ' done' : ''}">
+      <div class="sv-bar-head"><span class="nm">${name}</span><span class="amt">${fmt(Math.min(cur, tgt))} / ${fmt(tgt)}${done ? ' ✓' : ''}</span></div>
+      <div class="sv-bar-bg"><div class="sv-bar-fill" style="width:${pct}%;background:${done ? 'var(--green)' : color}"></div></div>
+    </div>`;
+  };
+  let bars = bar('Starter buffer', savings, starterTgt, 'var(--amber)') + bar('Full emergency fund', savings, fullTgt, 'var(--teal)');
+  if (goal > 0) {
+    const when = projState.parallel ? 'funding now, in parallel with debt' : (savings >= fullTgt - 0.005 ? 'funding now' : 'starts once the emergency fund is full');
+    bars += `<div class="sv-bar"><div class="sv-bar-head"><span class="nm">💸 Savings goal</span><span class="amt">${fmt(goal)}/mo</span></div>
+      <div class="ratio-note">${when}</div></div>`;
+  }
+  document.getElementById('savings-bars').innerHTML = bars;
+
+  // parallel cost hint
+  const costEl = document.getElementById('s-parallel-cost');
+  if (goal > 0 && anyDebt) {
+    const debts = projDebts(), extra = projState.extra || 0;
+    const base = { savings, starterTarget: starterTgt, fullTarget: fullTgt, savingsGoal: goal };
+    const off = simulate(debts, extra, projState.strategy, { ...base, parallel: false }).fullyMonth;
+    const on  = simulate(debts, extra, projState.strategy, { ...base, parallel: true  }).fullyMonth;
+    if (off != null && on != null && on > off) costEl.textContent = `parallel delays debt-free ~${on - off} mo`;
+    else costEl.textContent = '';
+  } else costEl.textContent = '';
 }
 
 // ─── Income allocation donut ────────────────────────────────────────────────
