@@ -735,6 +735,7 @@ html, body { max-width: 100%; overflow-x: clip; }
             <th class="num">Original (PLN)</th>
             <th class="num">Rate %</th>
             <th class="num sortable" onclick="sortDebts('min')" id="th-min">Monthly payment</th>
+            <th class="num" title="Interest this debt accrues per month at the current balance and rate — the bleed you stop by paying it down">Interest /mo</th>
             <th class="num">Months left</th>
             <th class="num">Payoff</th>
             <th></th>
@@ -748,6 +749,7 @@ html, body { max-width: 100%; overflow-x: clip; }
             <td class="num" id="total-balance">—</td>
             <td></td><td></td>
             <td class="num" id="total-min">—</td>
+            <td class="num" id="total-int">—</td>
             <td></td><td></td><td></td>
           </tr>
         </tfoot>
@@ -1699,6 +1701,10 @@ function renderDebtTable() {
     const groupMin = groupDebts.reduce((s,{d}) => s + (parseFloat(d.min)||0), 0);
     const groupBalPLN = isForeign ? groupBal * rate : groupBal;
     const groupMinPLN = isForeign ? groupMin * rate : groupMin;
+    const groupIntPLN = groupDebts.reduce((s, { d }) => {
+      const b = parseFloat(d.balance) || 0, r = parseFloat(d.rate) || 0;
+      return s + (isForeign ? b * rate : b) * r / 100 / 12;
+    }, 0);
 
     // group header row — cells align with columns: handle | name | balance | orig | rate | monthly | months | payoff | del
     const htr = document.createElement('tr');
@@ -1721,6 +1727,7 @@ function renderDebtTable() {
       <td class="num" style="font-weight:600">${headerBalStr}${cadNote}</td>
       <td></td><td></td>
       <td class="num" style="font-weight:600">${headerMinStr}</td>
+      <td class="num" style="font-weight:600;color:var(--coral)">${groupIntPLN > 0.005 ? fmt(groupIntPLN) : '—'}</td>
       <td></td><td></td><td></td>`;
     tbody.appendChild(htr);
 
@@ -1746,6 +1753,7 @@ function renderDebtTable() {
         <td class="num">${origInp}</td>
         <td class="num">${rateInp}</td>
         <td class="num">${minInp}</td>
+        <td class="num computed" id="int-${i}">—</td>
         <td class="num computed" id="months-${i}">—</td>
         <td class="num computed" id="payoff-${i}">—</td>
         <td><button class="del-btn" onclick="delDebt(${i})" title="Remove">✕</button></td>
@@ -1758,7 +1766,7 @@ function renderDebtTable() {
     const addTr = document.createElement('tr');
     addTr.className = 'group-child' + (collapsed[g.key] ? ' hidden' : '');
     addTr.dataset.group = g.key;
-    addTr.innerHTML = `<td colspan="9" style="padding:0.3rem 0.85rem 0.3rem 1.8rem;">
+    addTr.innerHTML = `<td colspan="10" style="padding:0.3rem 0.85rem 0.3rem 1.8rem;">
       <button class="add-row-btn" style="margin:0;padding:0.3rem" onclick="addDebtRow('${g.key}')">${g.addLabel}</button>
     </td>`;
     tbody.appendChild(addTr);
@@ -1997,7 +2005,7 @@ function recalc() {
   updateRateBar();
   const cadRate = S.cadRate || 0;
 
-  let totalBalance = 0, totalMin = 0;
+  let totalBalance = 0, totalMin = 0, totalInt = 0;
   S.debts.forEach((d, i) => {
     const balRaw = parseFloat(d.balance) || 0;
     const minRaw = parseFloat(d.min)     || 0;
@@ -2011,12 +2019,21 @@ function recalc() {
     const months = calcMonths(bal, debtRate, min);
     const mEl = document.getElementById(`months-${i}`);
     const pEl = document.getElementById(`payoff-${i}`);
+    const iEl = document.getElementById(`int-${i}`);
     if (mEl) mEl.textContent = isForeign && !cadRate ? 'set rate' : fmtMo(months);
     if (pEl) pEl.textContent = isForeign && !cadRate ? '—' : payoffDate(months);
+    const monthlyInt = bal * debtRate / 100 / 12;
+    totalInt += monthlyInt;
+    if (iEl) {
+      iEl.textContent = monthlyInt > 0.005 ? fmt(monthlyInt) : '—';
+      iEl.style.color = monthlyInt > 0.005 ? 'var(--coral)' : '';
+    }
   });
 
   document.getElementById('total-balance').textContent = totalBalance > 0 ? fmt(totalBalance) : '—';
   document.getElementById('total-min').textContent     = totalMin > 0     ? fmt(totalMin)     : '—';
+  const totIntEl = document.getElementById('total-int');
+  if (totIntEl) { totIntEl.textContent = totalInt > 0.005 ? fmt(totalInt) : '—'; totIntEl.style.color = totalInt > 0.005 ? 'var(--coral)' : ''; }
 
   // fixed costs total
   const totalCosts = (S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
