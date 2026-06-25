@@ -45,9 +45,9 @@ const EUROSTAT = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0
 async function getJSON(url) {
   const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
   const text = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url} :: ${text.slice(0, 200)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url} :: ${text.replace(/\s+/g,' ').slice(0, 600)}`);
   try { return JSON.parse(text); }
-  catch (e) { throw new Error(`non-JSON from ${url} :: ${text.slice(0, 200)}`); }
+  catch (e) { throw new Error(`non-JSON (ct=${res.headers.get('content-type')}) from ${url} :: ${text.replace(/\s+/g,' ').slice(0, 600)}`); }
 }
 
 // pull the latest non-null value for each COICOP from a JSON-stat response
