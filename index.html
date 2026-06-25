@@ -687,7 +687,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
         <div class="snap-rows">
           <div class="snap-row">
             <span class="key">Monthly net income</span>
-            <span class="amt"><input class="editable" id="s-income" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()"></span>
+            <span class="amt"><input class="editable" id="s-income" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()" onblur="reformatNum(this);recalc()"></span>
           </div>
           <div class="snap-row">
             <span class="key">Debt payments (auto)</span>
@@ -722,7 +722,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
         <div class="snap-rows">
           <div class="snap-row">
             <span class="key">Current savings / buffer</span>
-            <span class="amt"><input class="editable" id="s-savings" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()"></span>
+            <span class="amt"><input class="editable" id="s-savings" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()" onblur="reformatNum(this);recalc()"></span>
           </div>
           <div class="snap-row">
             <span class="key">Total monthly outgoings</span>
@@ -1560,15 +1560,37 @@ function inp(cls, val, placeholder, handler) {
   return `<input class="editable ${cls}" value="${esc(val)}" placeholder="${esc(placeholder)}" oninput="${handler}">`;
 }
 function numInp(val, placeholder, handler) {
-  // type="text" so we control the decimal separator (dot) regardless of browser locale
+  // type="text" so we control the decimal separator (dot) regardless of browser locale.
+  // onblur reformats the typed value (incl. any math expression) to 2dp.
   const v = val === '' || val == null ? '' : Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `<input class="editable" type="text" inputmode="decimal" value="${esc(v)}" placeholder="${esc(placeholder)}" oninput="${handler}">`;
+  return `<input class="editable" type="text" inputmode="decimal" value="${esc(v)}" placeholder="${esc(placeholder)}" oninput="${handler}" onblur="reformatNum(this)">`;
 }
 
+// Parse a typed value into a number. Accepts plain numbers ("1,234.56"),
+// and simple arithmetic so the user can type "125+10+30", "200-50", "1000/12".
 function parseNum(raw) {
   if (raw === '' || raw == null) return '';
-  // strip thousands commas, then parse
-  return parseFloat(String(raw).replace(/,/g, ''));
+  let s = String(raw).replace(/,/g, '').trim();
+  if (s === '') return '';
+  // plain number — fast path
+  if (/^-?\d*\.?\d+$/.test(s)) { const f = parseFloat(s); return isNaN(f) ? '' : f; }
+  // arithmetic expression — only allow safe characters
+  if (/^[0-9+\-*/(). ]+$/.test(s)) {
+    s = s.replace(/[+\-*/.\s]+$/, ''); // drop trailing operators while mid-typing
+    if (s === '') return '';
+    try {
+      const v = Function('"use strict";return (' + s + ')')();
+      if (typeof v === 'number' && isFinite(v)) return v;
+    } catch {}
+  }
+  const f = parseFloat(s); // last-ditch: leading number
+  return isNaN(f) ? '' : f;
+}
+
+// reformat an input's value to 2dp on blur (evaluating any expression first)
+function reformatNum(el) {
+  const n = parseNum(el.value);
+  el.value = (n === '' || isNaN(n)) ? '' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function updateDebt(i, field, raw) {
   const isStr = field === 'name' || field === 'type';
