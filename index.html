@@ -821,6 +821,7 @@ html, body { max-width: 100%; overflow-x: clip; }
             <span class="snap-total-key">💰 Free cash</span>
             <span class="snap-total-val" id="s-free">—</span>
           </div>
+          <div id="s-overbudget" class="rec-hint" style="color:var(--coral);display:none;margin-top:0.4rem">⚠ Over budget</div>
         </div>
         <div class="alloc-wrap" id="alloc-wrap" style="display:none">
           <canvas id="alloc-donut" width="150" height="150"></canvas>
@@ -1007,7 +1008,7 @@ html, body { max-width: 100%; overflow-x: clip; }
           <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-monthly" style="width:84px" onchange="onSavMonthly(this.value)">
           <span class="insights-label">PLN</span>
           <label class="insights-label" style="margin-left:0.6rem">Assumed APY</label>
-          <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-apy" value="5" style="width:64px" onchange="onApy(this.value)">
+          <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-apy" value="5" style="width:64px" onchange="onApy(this.value)" title="Also the debt-vs-save cutoff: debts priced above this APY get paid before topping up savings in the plan.">
           <span class="insights-label">%</span>
           <label class="insights-label" style="margin-left:0.6rem">Inflation</label>
           <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-infl" value="3.5" style="width:64px" onchange="onInflation(this.value)">
@@ -1046,7 +1047,7 @@ html, body { max-width: 100%; overflow-x: clip; }
       </div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
         <button class="btn btn-primary insights-btn" onclick="runInsights()" id="insights-btn">✦ Analyze my finances</button>
-        <button class="btn btn-ghost" onclick="refreshBenchmarks()" title="Re-fetch peer spending benchmarks via GitHub Action">↻ Refresh benchmarks</button>
+        <button class="btn btn-ghost" id="benchmark-btn" onclick="refreshBenchmarks()" title="Re-fetch peer spending benchmarks via GitHub Action">↻ Refresh benchmarks</button>
       </div>
       <div id="insights-output" class="insights-output" style="display:none"></div>
 
@@ -1459,6 +1460,7 @@ async function connectSync() {
   if (!token) { toast('Paste a GitHub token first', 'err'); return; }
   localStorage.setItem(SYNC_TOKEN_KEY, token);
   localStorage.setItem(SYNC_REPO_KEY, repo);
+  updateBenchmarkBtn();
   setSyncStatus('connecting…', 'busy');
   // validate token + repo
   const res = await ghContents('GET').catch(() => null);
@@ -2034,6 +2036,12 @@ function recalc() {
     freeEl.textContent  = fmt(free);
     freeEl.style.color  = free > 2000 ? 'var(--green)' : free > 0 ? 'var(--amber)' : 'var(--coral)';
   } else { freeEl.textContent = '—'; freeEl.style.color = 'var(--text)'; }
+  const obEl = document.getElementById('s-overbudget');
+  if (obEl) {
+    const over = free !== null && free < 0;
+    obEl.style.display = over ? 'block' : 'none';
+    if (over) obEl.textContent = `⚠ Over budget by ${fmt(-free)}/mo — your debt payments and costs exceed your income`;
+  }
 
   renderSavings(runway, obligations, free);
 
@@ -2383,6 +2391,19 @@ const BENCHMARK_REPO = 'konradgthecoder/debt-tracker';
 let benchmarks = null;
 async function loadBenchmarks() {
   try { const r = await fetch('benchmarks.json?t=' + Date.now()); if (r.ok) benchmarks = await r.json(); } catch {}
+}
+// Disable the refresh button until cloud sync is connected (it dispatches a GitHub
+// Action with the sync token); a plain-language tooltip explains why.
+function updateBenchmarkBtn() {
+  const btn = document.getElementById('benchmark-btn');
+  if (!btn) return;
+  const connected = !!syncToken();
+  btn.disabled = !connected;
+  btn.style.opacity = connected ? '' : '0.5';
+  btn.style.cursor = connected ? '' : 'not-allowed';
+  btn.title = connected
+    ? 'Re-fetch peer spending benchmarks via GitHub Action'
+    : 'Connect cloud sync first — the refresh runs through your GitHub token';
 }
 async function refreshBenchmarks() {
   const token = syncToken();
@@ -3021,7 +3042,7 @@ function drawSavingsGrowth() {
     const srcTxt = projState.savMonthly != null ? 'your figure'
       : projState.savingsGoal > 0 ? 'your monthly savings goal'
       : 'a recommended ~20% of income (edit to change)';
-    depNote.textContent = `Compounding ~${Math.round(monthly).toLocaleString('en-US')} PLN/mo (${srcTxt}) at your APY. “Today’s money” discounts the balance by inflation so you see real buying power.`;
+    depNote.textContent = `Compounding ~${Math.round(monthly).toLocaleString('en-US')} PLN/mo (${srcTxt}) at your APY. “Today’s money” discounts the balance by inflation so you see real buying power. Your APY (${projState.apy}%) is also the plan's cutoff — debts above it are paid before savings.`;
   }
   const r = (projState.apy || 0) / 100 / 12;
   const infl = (projState.inflation || 0) / 100 / 12; // monthly inflation
@@ -3615,6 +3636,7 @@ function renderAll() {
   switchProjTab(projState.tab || 'simulator');
   if (hasForeignDebts()) fetchCadRate();
   loadApiKey();
+  updateBenchmarkBtn();
   loadChatHistory();
   loadMemoryNotes();
   if (chatHistory.length) {
