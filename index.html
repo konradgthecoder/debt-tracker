@@ -1032,6 +1032,14 @@ function freshState() {
   };
 }
 
+// merge incoming data over a fresh state and backfill fields older saves lack
+function normalizeState(parsed) {
+  const s = { ...freshState(), ...parsed };
+  if (s.debts) s.debts.forEach(d => { if (d.original == null) d.original = d.balance || ''; });
+  if (s.costs) s.costs.forEach(c => { if (!c.kind) c.kind = classifyCost(c.name); });
+  return s;
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -1107,9 +1115,7 @@ async function shareExport() {
 function applyImport(raw) {
   const parsed = JSON.parse(raw);
   if (!parsed.debts) throw new Error('missing debts — is this a tracker export?');
-  parsed.debts.forEach(d => { if (d.original == null) d.original = d.balance || ''; });
-  if (parsed.costs) parsed.costs.forEach(c => { if (!c.kind) c.kind = classifyCost(c.name); });
-  S = { ...freshState(), ...parsed };
+  S = normalizeState(parsed);
   persist();
   renderAll();
 }
@@ -1186,7 +1192,7 @@ async function syncPull(force) {
     const remote = JSON.parse(b64decode(data.content));
     const localT = S.updatedAt || 0, remoteT = remote.updatedAt || 0;
     if (force || remoteT > localT) {
-      S = { ...freshState(), ...remote };
+      S = normalizeState(remote);
       persist(true);            // save locally without re-pushing
       renderAll();
       setSyncStatus('synced ✓', 'ok');
@@ -1227,7 +1233,7 @@ async function syncPush(immediate) {
         syncSha = d.sha;
         const remote = JSON.parse(b64decode(d.content));
         if ((remote.updatedAt || 0) > (S.updatedAt || 0)) {
-          S = { ...freshState(), ...remote }; persist(true); renderAll();
+          S = normalizeState(remote); persist(true); renderAll();
           setSyncStatus('synced ✓ (remote was newer)', 'ok'); _syncing = false; return;
         }
         body.sha = syncSha;
@@ -1291,10 +1297,10 @@ async function connectSync() {
     const localHas = (S.debts || []).length;
     if (remoteHas && localHas && (remote.updatedAt || 0) !== (S.updatedAt || 0)) {
       const useRemote = confirm(`This account already has synced data (${remoteHas} debts). Load it onto THIS device?\n\nOK = use synced data · Cancel = keep this device's data and push it up.`);
-      if (useRemote) { S = { ...freshState(), ...remote }; persist(true); renderAll(); }
+      if (useRemote) { S = normalizeState(remote); persist(true); renderAll(); }
       else { await syncPush(true); }
     } else if (remoteHas) {
-      S = { ...freshState(), ...remote }; persist(true); renderAll();
+      S = normalizeState(remote); persist(true); renderAll();
     } else {
       await syncPush(true);
     }
