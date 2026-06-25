@@ -927,16 +927,16 @@ html, body { max-width: 100%; overflow-x: hidden; }
         </div>
         <span class="sim-marker">APY compounded monthly (~4% cash, ~7% diversified). “Today’s money” discounts the balance by inflation so you see real buying power.</span>
         <div class="sim-stats" style="grid-template-columns:repeat(3,1fr)">
-          <div class="sim-stat"><div class="ss-label">In 5 years</div><div class="ss-val" id="sav-5y">—</div><div class="ss-sub" id="sav-5y-real"></div></div>
-          <div class="sim-stat"><div class="ss-label">In 10 years</div><div class="ss-val" id="sav-10y">—</div><div class="ss-sub" id="sav-10y-real"></div></div>
-          <div class="sim-stat"><div class="ss-label">In 30 years</div><div class="ss-val" id="sav-30y">—</div><div class="ss-sub" id="sav-30y-real"></div></div>
+          <div class="sim-stat"><div class="ss-label">In 5 years (today's money)</div><div class="ss-val" id="sav-5y">—</div><div class="ss-sub" id="sav-5y-real"></div></div>
+          <div class="sim-stat"><div class="ss-label">In 10 years (today's money)</div><div class="ss-val" id="sav-10y">—</div><div class="ss-sub" id="sav-10y-real"></div></div>
+          <div class="sim-stat"><div class="ss-label">In 30 years (today's money)</div><div class="ss-val" id="sav-30y">—</div><div class="ss-sub" id="sav-30y-real"></div></div>
         </div>
         <div class="proj-chart-head">
           <div class="proj-legend">
-            <span><span class="dot" style="background:#34D399"></span>Nominal (with compounding)</span>
-            <span><span class="dot" style="background:var(--amber)"></span>Real (today's money)</span>
-            <span><span class="dot" style="background:var(--muted)"></span>Contributions only</span>
+            <span><span class="dot" style="background:#34D399"></span>Your savings (today's money)</span>
+            <span><span class="dot" style="background:var(--muted)"></span>What you put in (today's money)</span>
           </div>
+          <span class="sim-marker" style="margin:0">gap = real gain above inflation</span>
         </div>
         <canvas id="sav-canvas"></canvas>
         <span class="sim-marker" id="sav-note"></span>
@@ -2778,23 +2778,28 @@ function drawSavingsGrowth() {
   const r = (projState.apy || 0) / 100 / 12;
   const infl = (projState.inflation || 0) / 100 / 12; // monthly inflation
   const MONTHS = 360;
-  const withYield = [start], contribOnly = [start], real = [start];
+  // everything in TODAY'S money so the chart is apples-to-apples:
+  //  realBalance  = nominal balance discounted to today
+  //  realContrib  = what you put in, each future deposit discounted to today
+  //  nominal kept only for the "account value" reference figure
+  const realBalance = [start], realContrib = [start], nominal = [start];
   let v = start;
   for (let m = 1; m <= MONTHS; m++) {
     v = v * (1 + r) + monthly;
-    withYield.push(v);
-    contribOnly.push(start + monthly * m);
-    real.push(v / Math.pow(1 + infl, m)); // nominal discounted to today's money
+    nominal.push(v);
+    const disc = Math.pow(1 + infl, m);
+    realBalance.push(v / disc);
+    realContrib.push(realContrib[m - 1] + monthly / disc);
   }
-  const at = y => withYield[Math.min(y * 12, MONTHS)];
-  const atReal = y => real[Math.min(y * 12, MONTHS)];
+  const atReal = y => realBalance[Math.min(y * 12, MONTHS)];
+  const atNom  = y => nominal[Math.min(y * 12, MONTHS)];
   [5, 10, 30].forEach(y => {
-    document.getElementById(`sav-${y}y`).textContent = fmt(at(y));
-    document.getElementById(`sav-${y}y-real`).textContent = '≈ ' + fmt(atReal(y)) + ' today';
+    document.getElementById(`sav-${y}y`).textContent = fmt(atReal(y));
+    document.getElementById(`sav-${y}y-real`).textContent = 'account value ' + fmt(atNom(y));
   });
-  const gain = withYield[MONTHS] - contribOnly[MONTHS];
+  const realGain = realBalance[MONTHS] - realContrib[MONTHS];
   document.getElementById('sav-note').textContent = (start || monthly)
-    ? `From ${fmt(start)} + ${fmt(monthly)}/mo at ${projState.apy}% APY: compounding adds ~${fmt(gain)} over 30y. After ${projState.inflation}% inflation, that 30-year balance is worth ~${fmt(atReal(30))} in today's money.`
+    ? `In today's money, you put in ~${fmt(realContrib[MONTHS])} over 30 years and it grows to ~${fmt(realBalance[MONTHS])} — a real gain of ~${fmt(realGain)} above inflation (${projState.apy}% APY vs ${projState.inflation}% inflation ≈ ${(projState.apy - projState.inflation).toFixed(1)}% real). Account value on paper: ~${fmt(nominal[MONTHS])}.`
     : 'Set a monthly savings goal (and current savings) to project your long-term growth.';
 
   // draw
@@ -2803,7 +2808,7 @@ function drawSavingsGrowth() {
   canvas.width = cssW * dpr; canvas.height = cssH * dpr;
   const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, cssW, cssH);
   const padL = 54, padR = 12, padT = 14, padB = 26, plotW = cssW - padL - padR, plotH = cssH - padT - padB;
-  const maxV = Math.max(withYield[MONTHS], 1);
+  const maxV = Math.max(realBalance[MONTHS], 1);
   const xAt = m => padL + (m / MONTHS) * plotW;
   const yAt = val => padT + plotH - (val / maxV) * plotH;
   const cGrid = cssVar('--border'), cLabel = cssVar('--muted');
@@ -2825,12 +2830,10 @@ function drawSavingsGrowth() {
     ctx.beginPath(); arr.forEach((val, m) => { const x = xAt(m), y = yAt(val); m ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
     ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
   };
-  // contributions-only (muted dashed)
-  line(contribOnly, cLabel, 1.5, [5, 4]);
-  // real / today's money (amber dashed)
-  line(real, cssVar('--amber'), 1.5, [3, 3]);
-  // nominal with-yield (green) + fill
-  ctx.beginPath(); withYield.forEach((val, m) => { const x = xAt(m), y = yAt(val); m ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  // what you put in, today's money (muted dashed)
+  line(realContrib, cLabel, 1.5, [5, 4]);
+  // your savings, today's money (green) + fill — the gap above the dashed line is the real gain
+  ctx.beginPath(); realBalance.forEach((val, m) => { const x = xAt(m), y = yAt(val); m ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
   ctx.strokeStyle = '#34D399'; ctx.lineWidth = 2; ctx.stroke();
   ctx.lineTo(xAt(MONTHS), padT + plotH); ctx.lineTo(padL, padT + plotH); ctx.closePath();
   ctx.fillStyle = 'rgba(52,211,153,0.10)'; ctx.fill();
