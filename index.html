@@ -1544,11 +1544,11 @@ function renderDebtTable() {
       const tr = document.createElement('tr');
       tr.className = 'group-child' + (collapsed[g.key] ? ' hidden' : '');
       tr.dataset.group = g.key;
-      const balInp  = numInp(d.balance,  '—', `updateDebt(${i},'balance',this.value)`);
-      const origInp = numInp(d.original, '—', `updateDebt(${i},'original',this.value)`);
+      const balInp  = numInp(d.balance,  '—', `updateDebt(${i},'balance',this.value)`, 'renderDebtTable();recalc()');
+      const origInp = numInp(d.original, '—', `updateDebt(${i},'original',this.value)`, 'renderDebtTable();recalc()');
       const rateInp = isForeign ? '<span style="color:var(--dim);font-size:0.82em">CAD</span>'
-                                : numInp(d.rate, d.type==='interest'?'%':'0', `updateDebt(${i},'rate',this.value)`);
-      const minInp  = numInp(d.min, '—', `updateDebt(${i},'min',this.value)`);
+                                : numInp(d.rate, d.type==='interest'?'%':'0', `updateDebt(${i},'rate',this.value)`, 'renderDebtTable();recalc()');
+      const minInp  = numInp(d.min, '—', `updateDebt(${i},'min',this.value)`, 'renderDebtTable();recalc()');
       // for foreign: show CAD balance, PLN equivalent in computed cols
       const plnBal = isForeign && S.cadRate ? (parseFloat(d.balance)||0) * S.cadRate : null;
       const balCell = isForeign && plnBal
@@ -1592,11 +1592,13 @@ function toggleGroup(key) {
 function inp(cls, val, placeholder, handler) {
   return `<input class="editable ${cls}" value="${esc(val)}" placeholder="${esc(placeholder)}" oninput="${handler}">`;
 }
-function numInp(val, placeholder, handler) {
+function numInp(val, placeholder, handler, blurExtra) {
   // type="text" so we control the decimal separator (dot) regardless of browser locale.
-  // onblur reformats the typed value (incl. any math expression) to 2dp.
+  // onblur reformats the typed value (incl. any math expression) to 2dp, then runs
+  // any blurExtra (e.g. re-render to refresh derived subtotals/sublines).
   const v = val === '' || val == null ? '' : Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `<input class="editable" type="text" inputmode="decimal" value="${esc(v)}" placeholder="${esc(placeholder)}" oninput="${handler}" onblur="reformatNum(this)">`;
+  const blur = 'reformatNum(this)' + (blurExtra ? ';' + blurExtra : '');
+  return `<input class="editable" type="text" inputmode="decimal" value="${esc(v)}" placeholder="${esc(placeholder)}" oninput="${handler}" onblur="${blur}">`;
 }
 
 // Parse a typed value into a number. Accepts plain numbers ("1,234.56"),
@@ -1685,9 +1687,9 @@ function renderCosts() {
       if (g.key === 'sinking') {
         const mo = costMonthly(c);
         const yearly = mo ? mo * 12 : '';
-        amtCell = `${numInp(yearly, '/yr', `updateCost(${i},'yearly',this.value)`)}<div class="cad-pln">≈ ${fmt(mo)}/mo</div>`;
+        amtCell = `${numInp(yearly, '/yr', `updateCost(${i},'yearly',this.value)`, 'renderCosts();recalc()')}<div class="cad-pln">≈ ${fmt(mo)}/mo</div>`;
       } else {
-        amtCell = numInp(c.amount, '0', `updateCost(${i},'amount',this.value)`);
+        amtCell = numInp(c.amount, '0', `updateCost(${i},'amount',this.value)`, 'renderCosts();recalc()');
       }
       tr.innerHTML = `
         <td class="drag-handle">⠿</td>
