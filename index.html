@@ -1216,17 +1216,34 @@ async function syncPush(immediate) {
         res = await ghContents('PUT', body);
       }
     }
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) throw new Error(await ghError(res));
     const out = await res.json();
     syncSha = out.content.sha;
     setSyncStatus('synced ✓', 'ok');
   } catch (e) {
-    setSyncStatus('save failed — will retry', 'err');
-    clearTimeout(_syncPushTimer);
-    _syncPushTimer = setTimeout(() => syncPush(), 8000);
+    console.error('[sync] push failed:', e);
+    const msg = String(e.message || e);
+    // auth/permission problems won't fix themselves — stop the retry loop and tell the user
+    if (/\b40[13]\b/.test(msg)) {
+      setSyncStatus('auth failed — check token', 'err');
+      toast('Sync auth failed: ' + msg + ' — token needs Contents:Read+Write on this repo', 'err');
+    } else if (/\b404\b/.test(msg)) {
+      setSyncStatus('repo not found', 'err');
+      toast('Sync: repo not found — check owner/repo. ' + msg, 'err');
+    } else {
+      setSyncStatus('save failed — will retry', 'err');
+      clearTimeout(_syncPushTimer);
+      _syncPushTimer = setTimeout(() => syncPush(), 8000);
+    }
   } finally {
     _syncing = false;
   }
+}
+
+async function ghError(res) {
+  let detail = '';
+  try { const j = await res.json(); detail = j.message || ''; } catch {}
+  return `HTTP ${res.status}${detail ? ' — ' + detail : ''}`;
 }
 
 async function connectSync() {
