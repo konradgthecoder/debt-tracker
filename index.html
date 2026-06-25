@@ -791,7 +791,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
           </div>
         </div>
         <div class="sv-targets">
-          <span>Starter buffer <input class="editable sv-mini" id="s-starter-months" type="text" inputmode="decimal" value="1" oninput="onStarterMonths(this.value)"> mo</span>
+          <span>Starter buffer <input class="editable sv-mini" id="s-starter-amount" type="text" inputmode="decimal" value="4000" style="width:64px" oninput="onStarterAmount(this.value)"> PLN</span>
           <span>Full emergency fund <input class="editable sv-mini" id="s-ef-months" type="text" inputmode="decimal" value="6" oninput="onEfMonths(this.value)"> mo</span>
           <span id="s-outgoings-note"></span>
         </div>
@@ -1993,12 +1993,12 @@ function renderSavings(runway, obligations, free) {
   // sync inputs from state (don't fight the user's cursor)
   const sync = (id, val) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = val; };
   sync('s-goal', projState.savingsGoal ? Number(projState.savingsGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
-  sync('s-starter-months', projState.starterMonths);
+  sync('s-starter-amount', projState.starterAmount ? Number(projState.starterAmount).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '');
   sync('s-ef-months', projState.efMonths);
   const par = document.getElementById('s-parallel'); if (par) par.checked = !!projState.parallel;
 
   const savings = parseFloat(S.savings) || 0;
-  const starterTgt = obligations * (projState.starterMonths || 0);
+  const starterTgt = projState.starterAmount || 0;
   const fullTgt = obligations * (projState.efMonths || 0);
   const goal = projState.savingsGoal || 0;
   const hiDebt = projDebts().some(d => d.rate >= HI_RATE && d.bal > 0.005);
@@ -2220,7 +2220,7 @@ function allocCanvasMove(e) {
 
 // ─── Payoff projection engine ──────────────────────────────────────────────
 const PROJ_STORAGE = 'debt_tracker_proj';
-let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, starterMonths: 1, savingsGoal: 0, parallel: false, apy: 5, inflation: 3.5 };
+let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, starterAmount: 4000, savingsGoal: 0, parallel: false, apy: 5, inflation: 3.5 };
 
 // ─── Peer spending benchmarks (baked benchmarks.json, refreshed via GitHub Action) ──
 const BENCHMARK_REPO = 'konradgthecoder/debt-tracker';
@@ -2248,8 +2248,8 @@ async function refreshBenchmarks() {
 function monthlyOutgoings() {
   return (_calc.totalMin || 0) + ((S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0));
 }
-function efTarget()      { return monthlyOutgoings() * (projState.efMonths || 0); }      // full emergency fund
-function starterTarget() { return monthlyOutgoings() * (projState.starterMonths || 0); } // starter buffer
+function efTarget()      { return monthlyOutgoings() * (projState.efMonths || 0); } // full emergency fund (months of outgoings)
+function starterTarget() { return projState.starterAmount || 0; }                  // small fixed starter buffer (~1 month essentials)
 
 // waterfall options for the engine; null when there's nothing to allocate beyond debt
 function simOpts() {
@@ -2758,7 +2758,7 @@ function toggleZoom() {
   document.getElementById('proj-zoom').textContent = 'Zoom: ' + (projState.zoom === 'consumer' ? 'consumer window' : 'full horizon');
   saveProjState(); renderProjection();
 }
-function onStarterMonths(v) { projState.starterMonths = Math.max(0, parseNum(v) || 0); saveProjState(); recalc(); }
+function onStarterAmount(v) { projState.starterAmount = Math.max(0, parseNum(v) || 0); saveProjState(); recalc(); }
 function onSavingsGoal(v)   { projState.savingsGoal = Math.max(0, parseNum(v) || 0); saveProjState(); recalc(); }
 function onParallelToggle(checked) { projState.parallel = !!checked; saveProjState(); recalc(); }
 function onApy(v)           { projState.apy = Math.max(0, Math.min(30, parseNum(v) || 0)); saveProjState(); drawSavingsGrowth(); }
@@ -2848,7 +2848,7 @@ function projectionSummary() {
   const sim = simulate(debts, projState.extra || 0, projState.strategy, opts);
   const order = orderDebts(debts, projState.strategy).map(d => d.name).join(' → ');
   const savingsLine = opts
-    ? `- Savings waterfall: starter buffer ${fmt(starterTarget())} (${projState.starterMonths}mo) → high-interest debt (≥${HI_RATE}%) → full emergency fund ${fmt(efTarget())} (${projState.efMonths}mo) → savings goal ${fmt(projState.savingsGoal || 0)}/mo${projState.parallel ? ' (funded IN PARALLEL with debt)' : ' (after EF is full)'} → extra on low-rate debt. Current savings ${fmt(parseFloat(S.savings) || 0)}; emergency fund full ${sim.fundFullMonth === 0 ? 'already' : sim.fundFullMonth != null ? monthsToDate(sim.fundFullMonth) : 'not within horizon'}.`
+    ? `- Savings waterfall (evidence-based, debt-first): small starter buffer ${fmt(starterTarget())} → high-interest debt (≥${HI_RATE}%) → full emergency fund ${fmt(efTarget())} (${projState.efMonths}mo) → savings goal ${fmt(projState.savingsGoal || 0)}/mo${projState.parallel ? ' (funded IN PARALLEL with debt)' : ' (after EF is full)'} → extra on low-rate debt. The starter buffer is intentionally small (~1 month essentials) so it doesn't delay high-interest payoff. Current savings ${fmt(parseFloat(S.savings) || 0)}; emergency fund full ${sim.fundFullMonth === 0 ? 'already' : sim.fundFullMonth != null ? monthsToDate(sim.fundFullMonth) : 'not within horizon'}.`
     : `- Savings waterfall: no targets set yet.`;
   return `\nPAYOFF PROJECTION (computed by the tracker engine — reason about THESE numbers, do not re-derive)
 - Strategy: ${projState.strategy} (payoff order: ${order})

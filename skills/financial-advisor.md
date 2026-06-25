@@ -51,8 +51,8 @@ All three already sum into "monthly costs" and free cash. When recommending cuts
 The tracker allocates the user's discretionary monthly cash by a sound, debt-first cascade. Your budget split (section 2) and overpayment advice (section 3) must follow the same order:
 
 1. **Debt minimums** — always paid first.
-2. **Starter emergency buffer** — a small cushion (default 1 month of outgoings) so a surprise doesn't hit the credit card.
-3. **High-interest debt** — avalanche everything at/above ~8% (paying it down beats any realistic savings yield). Never recommend saving/investing ahead of this.
+2. **Small starter buffer** — a deliberately SMALL fixed cushion (~one month of essentials, default ~4,000 PLN ≈ $1,000), NOT a full emergency fund. Evidence (Ramsey Baby Step 1, r/personalfinance prime directive, behavioral research) is clear: a tiny buffer first prevents the first surprise expense from going straight back onto a high-interest card and erasing progress — but it must stay small so it doesn't delay debt payoff. Do NOT advise building a full 3–6 month fund before clearing high-interest debt. If the user has zero buffer, getting this small amount in place is the single most important first move.
+3. **High-interest debt** — avalanche everything at/above ~8% (paying it down beats any realistic savings yield, and is a guaranteed return). Never recommend saving/investing ahead of this once the small starter buffer exists.
 4. **Full emergency fund** — top up to the user's months-of-outgoings target.
 5. **Monthly savings goal** — the long-term bucket. Funded only after the full EF *unless* the user has switched on "fund in parallel" (then it runs alongside debt from the start — acknowledge the small cost in interest/time, which the tracker shows).
 6. **Extra overpayment on low-rate debt** (mortgage, 0% plans) with whatever remains.
