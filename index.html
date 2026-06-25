@@ -571,6 +571,88 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   /* nav pins just under the sticky top ribbon (height measured into --ribbon-h) and
      scrolls horizontally so the pills never wrap into a tall block */
   .section-nav { top: var(--ribbon-h, 92px); flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* ─── Mobile card layout for data tables ─── */
+  /* No sideways scroll: the wrap is a plain block, the table collapses to blocks. */
+  .scroll-hint { display: none; }
+  .table-wrap { overflow-x: visible; border: none; border-radius: 0; }
+  .table-wrap table { min-width: 0 !important; width: 100%; display: block; }
+  .table-wrap colgroup { display: none; }
+  /* hide the column header row + the drag handle (drag doesn't work on touch) */
+  .table-wrap thead { display: none; }
+  .table-wrap .drag-handle { display: none; }
+  .table-wrap tbody, .table-wrap tfoot { display: block; }
+  .table-wrap tr { display: block; }
+  .table-wrap td { display: block; border-bottom: none; padding: 0; }
+
+  /* group header as a block banner */
+  .table-wrap tr.group-header { display: block; margin: 1rem 0 0.5rem; }
+  .table-wrap tr.group-header td { display: none; }
+  .table-wrap tr.group-header td:nth-child(2) {
+    display: block; background: transparent; border-bottom: none;
+    padding: 0.2rem 0; cursor: pointer;
+  }
+  /* surface the group's balance + interest subtotals under the badge */
+  .table-wrap tr.group-header td.num { display: block; padding: 0; }
+  .table-wrap tr.group-header td.num:empty { display: none; }
+  .table-wrap tr.group-header td.num::before {
+    content: attr(data-label) ': '; color: var(--dim);
+  }
+
+  /* each debt / cost child becomes a card */
+  .table-wrap tr.group-child {
+    display: block; background: var(--card2);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.7rem 0.85rem; margin-bottom: 0.6rem;
+  }
+  .table-wrap tr.group-child.hidden { display: none; }
+  .table-wrap tr.group-child:hover td { background: transparent; }
+  /* the name input spans the card top, prominent */
+  .table-wrap td.cell-name {
+    padding: 0 0 0.5rem !important; margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-wrap td.cell-name .editable { font-size: 16px !important; font-weight: 600; }
+  /* labeled field rows */
+  .table-wrap tr.group-child td[data-label] {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.75rem; padding: 0.28rem 0; text-align: right;
+  }
+  .table-wrap tr.group-child td[data-label]::before {
+    content: attr(data-label); color: var(--muted);
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    text-align: left; flex: 0 0 auto;
+  }
+  .table-wrap tr.group-child td[data-label] .editable { width: auto; max-width: 60%; }
+  .table-wrap tr.group-child td.computed { justify-content: space-between; }
+  /* delete button: full-width row at the card bottom */
+  .table-wrap td.cell-del {
+    padding-top: 0.5rem !important; margin-top: 0.4rem;
+    border-top: 1px solid var(--border); text-align: right;
+  }
+  .table-wrap td.cell-del .del-btn { opacity: 0.6; }
+  /* the foreign "≈ PLN" subline stays under its value */
+  .table-wrap tr.group-child td .cad-pln { width: 100%; text-align: right; }
+
+  /* add-row: not a card, just the dashed button */
+  .table-wrap tr.add-tr {
+    display: block; background: transparent; border: none;
+    border-radius: 0; padding: 0; margin-bottom: 0.6rem;
+  }
+  .table-wrap tr.add-tr td { display: none; }
+  .table-wrap tr.add-tr td[colspan] { display: block; padding: 0 !important; }
+  .table-wrap tr.add-tr td[colspan]::before { content: none; }
+
+  /* Total row as a block summary */
+  .table-wrap tr.total-row { display: block; margin-top: 0.4rem; padding: 0.6rem 0.85rem;
+    background: var(--card2); border-radius: 10px; }
+  .table-wrap tr.total-row td { display: none; }
+  .table-wrap tr.total-row td:nth-child(2) { display: block; font-weight: 700; padding: 0; }
+  .table-wrap tr.total-row td.num { display: flex; justify-content: space-between; padding: 0.2rem 0; }
+  .table-wrap tr.total-row td.num:empty { display: none; }
+  .table-wrap tr.total-row td.num::before {
+    content: attr(data-label) ': '; color: var(--muted); font-weight: 600;
+  }
 }
 /* overflow-x: clip prevents horizontal overflow WITHOUT making body a scroll
    container — using `hidden` here would silently break position: sticky/fixed
@@ -775,10 +857,10 @@ html, body { max-width: 100%; overflow-x: clip; }
           <tr class="total-row">
             <td></td>
             <td>Total</td>
-            <td class="num" id="total-balance">—</td>
+            <td class="num" data-label="Balance" id="total-balance">—</td>
             <td></td><td></td>
-            <td class="num" id="total-min">—</td>
-            <td class="num" id="total-int">—</td>
+            <td class="num" data-label="Monthly" id="total-min">—</td>
+            <td class="num" data-label="Interest /mo" id="total-int">—</td>
             <td></td><td></td><td></td>
           </tr>
         </tfoot>
@@ -816,7 +898,7 @@ html, body { max-width: 100%; overflow-x: clip; }
           <tr class="total-row">
             <td></td>
             <td>Total monthly costs</td>
-            <td class="num" id="total-costs">—</td>
+            <td class="num" data-label="Total" id="total-costs">—</td>
             <td></td>
           </tr>
         </tfoot>
@@ -1756,10 +1838,10 @@ function renderDebtTable() {
           <span style="color:var(--dim);font-size:0.75rem">${groupDebts.length} item${groupDebts.length!==1?'s':''}</span>
         </div>
       </td>
-      <td class="num" style="font-weight:600">${headerBalStr}${cadNote}</td>
+      <td class="num" data-label="Balance" style="font-weight:600">${headerBalStr}${cadNote}</td>
       <td></td><td></td>
-      <td class="num" style="font-weight:600">${headerMinStr}</td>
-      <td class="num" style="font-weight:600;color:var(--coral)">${groupIntPLN > 0.005 ? fmt(groupIntPLN) : '—'}</td>
+      <td class="num" data-label="Monthly" style="font-weight:600">${headerMinStr}</td>
+      <td class="num" data-label="Interest /mo" style="font-weight:600;color:var(--coral)">${groupIntPLN > 0.005 ? fmt(groupIntPLN) : '—'}</td>
       <td></td><td></td><td></td>`;
     tbody.appendChild(htr);
 
@@ -1780,15 +1862,15 @@ function renderDebtTable() {
         : balInp;
       tr.innerHTML = `
         <td class="drag-handle">⠿</td>
-        <td style="padding-left:0.5rem">${inp('left', d.name, 'Name', `updateDebt(${i},'name',this.value)`)}</td>
-        <td class="num">${balCell}</td>
-        <td class="num">${origInp}</td>
-        <td class="num">${rateInp}</td>
-        <td class="num">${minInp}</td>
-        <td class="num computed" id="int-${i}">—</td>
-        <td class="num computed" id="months-${i}">—</td>
-        <td class="num computed" id="payoff-${i}">—</td>
-        <td><button class="del-btn" onclick="delDebt(${i})" title="Remove">✕</button></td>
+        <td class="cell-name" style="padding-left:0.5rem">${inp('left', d.name, 'Name', `updateDebt(${i},'name',this.value)`)}</td>
+        <td class="num" data-label="Balance">${balCell}</td>
+        <td class="num" data-label="Original">${origInp}</td>
+        <td class="num" data-label="Rate %">${rateInp}</td>
+        <td class="num" data-label="Monthly payment">${minInp}</td>
+        <td class="num computed" data-label="Interest /mo" id="int-${i}">—</td>
+        <td class="num computed" data-label="Months left" id="months-${i}">—</td>
+        <td class="num computed" data-label="Payoff" id="payoff-${i}">—</td>
+        <td class="cell-del"><button class="del-btn" onclick="delDebt(${i})" title="Remove">✕</button></td>
       `;
       setupDebtDrag(tr, i);
       tbody.appendChild(tr);
@@ -1796,7 +1878,7 @@ function renderDebtTable() {
 
     // add row inside group
     const addTr = document.createElement('tr');
-    addTr.className = 'group-child' + (collapsed[g.key] ? ' hidden' : '');
+    addTr.className = 'group-child add-tr' + (collapsed[g.key] ? ' hidden' : '');
     addTr.dataset.group = g.key;
     addTr.innerHTML = `<td colspan="10" style="padding:0.3rem 0.85rem 0.3rem 1.8rem;">
       <button class="add-row-btn" style="margin:0;padding:0.3rem" onclick="addDebtRow('${g.key}')">${g.addLabel}</button>
@@ -1901,7 +1983,7 @@ function renderCosts() {
       <td><div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
         <span style="font-weight:700">${g.label}</span>
         <span style="color:var(--dim);font-size:0.72rem">${g.hint}</span></div></td>
-      <td class="num" style="font-weight:700">${sub > 0 ? fmt(sub) + '/mo' : '—'}</td>
+      <td class="num" data-label="Subtotal" style="font-weight:700">${sub > 0 ? fmt(sub) + '/mo' : '—'}</td>
       <td></td>`;
     tbody.appendChild(htr);
 
@@ -1918,20 +2000,20 @@ function renderCosts() {
       }
       tr.innerHTML = `
         <td class="drag-handle">⠿</td>
-        <td style="padding-left:0.5rem">
+        <td class="cell-name" style="padding-left:0.5rem">
           <div style="display:flex;gap:0.4rem;align-items:center">
             ${inp('left', c.name, 'Category', `updateCost(${i},'name',this.value)`)}
             ${kindSelect(i, g.key)}
           </div>
         </td>
-        <td class="num">${amtCell}</td>
-        <td><button class="del-btn" onclick="delCost(${i})">✕</button></td>`;
+        <td class="num" data-label="Amount">${amtCell}</td>
+        <td class="cell-del"><button class="del-btn" onclick="delCost(${i})">✕</button></td>`;
       setupCostDrag(tr, i);
       tbody.appendChild(tr);
     });
 
     const atr = document.createElement('tr');
-    atr.className = 'group-child'; atr.dataset.group = g.key;
+    atr.className = 'group-child add-tr'; atr.dataset.group = g.key;
     atr.innerHTML = `<td></td><td colspan="3" style="padding:0">
       <button class="add-row-btn" style="margin:0;padding:0.3rem" onclick="addCostRow('${g.key}')">+ add ${g.label.split(' ')[0].toLowerCase()} cost</button></td>`;
     tbody.appendChild(atr);
