@@ -44,8 +44,10 @@ const EUROSTAT = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0
 
 async function getJSON(url) {
   const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url} :: ${text.slice(0, 200)}`);
+  try { return JSON.parse(text); }
+  catch (e) { throw new Error(`non-JSON from ${url} :: ${text.slice(0, 200)}`); }
 }
 
 // pull the latest non-null value for each COICOP from a JSON-stat response
@@ -89,8 +91,8 @@ async function fetchEurPln() {
 }
 
 async function fetchPopulation() {
-  // Eurostat demo_pjan, total population PL, latest year
-  const url = `${EUROSTAT}/demo_pjan?format=JSON&geo=PL&sex=T&age=TOTAL`;
+  // Eurostat demo_pjan, total population PL, recent years (filtered to keep query small)
+  const url = `${EUROSTAT}/demo_pjan?format=JSON&lang=en&freq=A&unit=NR&sex=T&age=TOTAL&geo=PL&sinceTimePeriod=2019`;
   const js = await getJSON(url);
   const timeIdx = js.dimension.time.category.index;
   const times = Object.keys(timeIdx).sort();
@@ -115,7 +117,7 @@ async function main() {
 
   console.log('Fetching household consumption by COICOP (Eurostat nama_10_co3_p3)…');
   // current prices, million EUR, domestic concept (P31_S14)
-  const url = `${EUROSTAT}/nama_10_co3_p3?format=JSON&geo=PL&unit=CP_MEUR&na_item=P31_S14`;
+  const url = `${EUROSTAT}/nama_10_co3_p3?format=JSON&lang=en&freq=A&unit=CP_MEUR&na_item=P31_S14&geo=PL&sinceTimePeriod=2018`;
   const js = await getJSON(url);
   const byCoicop = latestByCoicop(js);
   if (Object.keys(byCoicop).length < 6) throw new Error('too few COICOP values parsed — aborting to protect existing data');
