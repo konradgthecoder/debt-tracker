@@ -306,11 +306,13 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .insights-output ol { padding-left: 1.4rem; margin: 0.3rem 0; }
 .insights-output ol li { margin: 0.15rem 0; }
 .ins-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; margin: 0.5rem 0; }
-.ins-table { border-collapse: collapse; font-size: 0.84rem; }
-.ins-table th, .ins-table td { padding: 0.35rem 0.8rem; border: 1px solid var(--border2); text-align: left; vertical-align: top; min-width: 90px; max-width: 280px; }
-.ins-table th { background: var(--card2); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+.ins-table { border-collapse: collapse; font-size: 0.84rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.ins-table th, .ins-table td { padding: 0.45rem 0.9rem; text-align: left; vertical-align: top; min-width: 90px; max-width: 300px; border: none; }
+.ins-table th { background: var(--card2); color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; border-bottom: 1px solid var(--border2); }
+.ins-table tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+.ins-table tr:last-child td { font-weight: 600; }  /* totals row reads as a footer */
 .ins-table td { font-variant-numeric: tabular-nums; }
-.ins-table td:first-child, .ins-table th:first-child { min-width: 120px; }
+.ins-table td:first-child, .ins-table th:first-child { min-width: 130px; }
 
 /* ─── Chat ─── */
 .chat-section { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -349,6 +351,12 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .chat-msg-assistant li { margin: 0.1rem 0; }
 .chat-msg-assistant p { margin: 0.3rem 0; }
 .chat-msg-assistant .ins-table { font-size: 0.8rem; }
+.cu-head { display: flex; gap: 0.4rem; align-items: center; cursor: pointer; font-weight: 600; }
+.cu-hint { color: var(--muted); font-weight: 400; font-size: 0.72rem; margin-left: auto; }
+.cu-chevron { font-size: 0.6rem; transition: transform 0.15s; }
+.chat-msg-user:not(.collapsed) .cu-chevron { transform: rotate(90deg); }
+.chat-msg-user.collapsed .cu-body { display: none; }
+.cu-body { margin-top: 0.5rem; white-space: pre-wrap; font-size: 0.8rem; color: var(--muted); max-height: 320px; overflow: auto; }
 .chat-input-row { display: flex; gap: 0.5rem; align-items: flex-end; }
 .chat-textarea {
   flex: 1; background: var(--card2); border: 1px solid var(--border2); border-radius: 6px;
@@ -2848,11 +2856,17 @@ function renderChatHistory() {
   const el = document.getElementById('chat-history');
   if (!chatHistory.length) { el.innerHTML = ''; updateChatCounter(); return; }
   el.innerHTML = chatHistory.map(msg => {
-    const cls = msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-assistant';
-    const content = msg.role === 'user'
-      ? esc(msg.content)
-      : renderMarkdown(msg.content);
-    return `<div class="chat-msg ${cls}">${content}</div>`;
+    if (msg.role !== 'user') return `<div class="chat-msg chat-msg-assistant">${renderMarkdown(msg.content)}</div>`;
+    // long user messages (the financial snapshot, mostly) collapse by default
+    if (msg.content.length > 200) {
+      const isSnap = /personal finance advisor/i.test(msg.content);
+      const label = isSnap ? '📋 Financial snapshot sent to Claude' : 'Long message';
+      return `<div class="chat-msg chat-msg-user collapsed" onclick="this.classList.toggle('collapsed')">
+        <div class="cu-head"><span class="cu-chevron">▶</span><span>${label}</span><span class="cu-hint">tap to expand</span></div>
+        <div class="cu-body">${esc(msg.content)}</div>
+      </div>`;
+    }
+    return `<div class="chat-msg chat-msg-user">${esc(msg.content)}</div>`;
   }).join('');
   el.scrollTop = el.scrollHeight;
   updateChatCounter();
