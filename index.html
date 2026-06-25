@@ -30,6 +30,8 @@
   --muted:  #6B8BAD;
   --dim:    #3A5878;
   --green:  #22C99A;
+  --row-hover:   rgba(255,255,255,0.04);
+  --group-hover: #1d2f48;
 }
 @media (prefers-color-scheme: light) {
   :root {
@@ -45,6 +47,8 @@
     --muted:  #5A6E88;
     --dim:    #93A3B8;
     --green:  #0C9E6C;
+    --row-hover:   rgba(21,35,58,0.05);
+    --group-hover: #E3EAF3;
   }
   /* lighter scrollbars + subtle elevation so white cards read against the page */
   * { scrollbar-color: #C7D2E0 transparent; }
@@ -125,16 +129,16 @@ th {
   border-bottom: 1px solid var(--border);
 }
 th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { color: var(--fg); }
-th.sort-asc::after  { content: ' ↑'; color: var(--accent); }
-th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+th.sortable:hover { color: var(--text); }
+th.sort-asc::after  { content: ' ↑'; color: var(--teal); }
+th.sort-desc::after { content: ' ↓'; color: var(--teal); }
 th:first-child, td:first-child { min-width: 200px; width: 200px; }
 th:nth-child(2), td:nth-child(2) { min-width: 120px; width: 120px; }
 th.num, td.num { text-align: right; }
 td { padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
 tr.total-row td { background: var(--card2); font-weight: 700; border-top: 1px solid var(--border2); }
-tr.group-child:hover td, #costs-body tr:hover td { background: rgba(255,255,255,0.03); }
+tr.group-child:hover td, #costs-body tr:hover td { background: var(--row-hover); }
 
 /* ─── Editable cells ─── */
 .editable {
@@ -189,7 +193,7 @@ tr.group-header td {
   border-bottom: 1px solid var(--border2); cursor: pointer;
   user-select: none;
 }
-tr.group-header:hover td { background: #1d2f48; }
+tr.group-header:hover td { background: var(--group-hover); }
 .group-label { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.82rem; }
 .group-chevron { font-size: 0.65rem; transition: transform 0.2s; display: inline-block; color: var(--dim); }
 .group-header.collapsed .group-chevron { transform: rotate(-90deg); }
@@ -1151,7 +1155,8 @@ async function ghContents(method, body) {
     },
   };
   if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
-  return fetch(method === 'GET' ? url + '?ref=HEAD&t=' + Date.now() : url, opts);
+  // cache-bust GET so we don't read a stale copy; let it use the repo's default branch
+  return fetch(method === 'GET' ? url + '?t=' + Date.now() : url, opts);
 }
 
 // Pull remote; adopt it only if it's newer than local (last-write-wins by updatedAt)
