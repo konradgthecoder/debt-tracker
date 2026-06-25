@@ -2159,6 +2159,12 @@ function renderAllocation() {
   shown.forEach(s => { s.a0 = a0; s.a1 = a0 + (s.value / total) * Math.PI * 2; a0 = s.a1; });
   _alloc = { canvas, shown, total, free, cx, cy, rOuter, rInner, size };
 
+  // size the backing store once here, not on every hover frame (resizing it each
+  // mousemove clears + reallocates the canvas and is itself a flicker risk)
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = size * dpr; canvas.height = size * dpr;
+  canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+
   drawAllocDonut(-1);
 
   // legend — percentages via largest-remainder so they sum to exactly 100
@@ -2221,8 +2227,6 @@ function drawAllocDonut(hover) {
   if (!_alloc) return;
   const { canvas, shown, total, free, cx, cy, rOuter, rInner, size } = _alloc;
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = size * dpr; canvas.height = size * dpr;
-  canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
@@ -2272,10 +2276,15 @@ function allocCanvasMove(e) {
   const rect = _alloc.canvas.getBoundingClientRect();
   const x = e.clientX - rect.left - _alloc.cx, y = e.clientY - rect.top - _alloc.cy;
   const dist = Math.hypot(x, y);
-  if (dist < _alloc.rInner || dist > _alloc.rOuter + 5) { allocHover(-1); return; }
+  // generous outer margin: the hovered segment grows to rOuter+4, plus DPR/rect rounding —
+  // a tight bound here flips to -1 mid-hover and flashes the dimmed rows back on for a frame
+  if (dist < _alloc.rInner - 1 || dist > _alloc.rOuter + 8) { allocHover(-1); return; }
   let ang = Math.atan2(y, x);
   if (ang < -Math.PI / 2) ang += Math.PI * 2; // normalize to start at -PI/2
-  const idx = _alloc.shown.findIndex(s => ang >= s.a0 && ang < s.a1);
+  let idx = _alloc.shown.findIndex(s => ang >= s.a0 && ang < s.a1);
+  // seam miss (float rounding between one segment's a1 and the next's a0): keep the current
+  // segment rather than flashing to none
+  if (idx < 0) idx = _allocHover >= 0 ? _allocHover : 0;
   allocHover(idx);
 }
 
