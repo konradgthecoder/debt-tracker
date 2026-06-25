@@ -2,25 +2,87 @@
   "generatedAt": "2026-06-25",
   "country": "PL",
   "basis": "per person, per month, PLN",
-  "note": "National per-capita averages from Poland's household final consumption by COICOP, divided by population. Warsaw typically runs ~20-30% higher than the national average, and a single person in their late 20s skews toward dining/transport/recreation and away from health/education/furnishings — adjust accordingly. Treat as a baseline, not a target.",
+  "note": "National per-capita averages from Poland's household final consumption by COICOP (Eurostat), ÷ population, EUR→PLN at NBP rate. Warsaw runs ~20-30% higher and a single late-20s person skews toward dining/transport/recreation — adjust. Baseline, not a target.",
   "sources": [
-    "Eurostat nama_10_co3_p3 (household final consumption by COICOP, PL)",
-    "GUS Household Budget Survey (per-capita monthly expenditure)"
+    "Eurostat nama_10_co3_p3 (household final consumption by COICOP, PL, 2023)",
+    "Eurostat demo_pjan population (2025)",
+    "NBP EUR/PLN reference rate"
   ],
-  "approxSeed": true,
+  "eurPln": 4.2878,
+  "population": 36497495,
+  "approxSeed": false,
   "categories": [
-    { "label": "Food & groceries (at home)",          "coicop": "CP01",  "monthlyPLN": 430 },
-    { "label": "Restaurants, dining out & bars",        "coicop": "CP11",  "monthlyPLN": 150 },
-    { "label": "Housing, utilities, water, energy",     "coicop": "CP04",  "monthlyPLN": 380 },
-    { "label": "Transport (incl. fuel)",                "coicop": "CP07",  "monthlyPLN": 200 },
-    { "label": "Communication (phone & internet)",      "coicop": "CP08",  "monthlyPLN": 70  },
-    { "label": "Recreation & culture",                  "coicop": "CP09",  "monthlyPLN": 150 },
-    { "label": "Clothing & footwear",                   "coicop": "CP03",  "monthlyPLN": 95  },
-    { "label": "Health, medical & pharmacy",            "coicop": "CP06",  "monthlyPLN": 120 },
-    { "label": "Furnishings & household goods",         "coicop": "CP05",  "monthlyPLN": 110 },
-    { "label": "Alcohol & tobacco",                     "coicop": "CP02",  "monthlyPLN": 110 },
-    { "label": "Personal care & grooming",              "coicop": "CP12a", "monthlyPLN": 75  },
-    { "label": "Education",                             "coicop": "CP10",  "monthlyPLN": 30  },
-    { "label": "Other goods & services",                "coicop": "CP12",  "monthlyPLN": 120 }
+    {
+      "label": "Food & groceries (at home)",
+      "coicop": "CP01",
+      "monthlyPLN": 781,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Alcohol & tobacco",
+      "coicop": "CP02",
+      "monthlyPLN": 250,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Clothing & footwear",
+      "coicop": "CP03",
+      "monthlyPLN": 188,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Housing, utilities, water, energy",
+      "coicop": "CP04",
+      "monthlyPLN": 868,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Furnishings & household goods",
+      "coicop": "CP05",
+      "monthlyPLN": 198,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Health, medical & pharmacy",
+      "coicop": "CP06",
+      "monthlyPLN": 258,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Transport (incl. fuel)",
+      "coicop": "CP07",
+      "monthlyPLN": 539,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Communication (phone & internet)",
+      "coicop": "CP08",
+      "monthlyPLN": 78,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Recreation & culture",
+      "coicop": "CP09",
+      "monthlyPLN": 255,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Education",
+      "coicop": "CP10",
+      "monthlyPLN": 29,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Restaurants, dining out & bars",
+      "coicop": "CP11",
+      "monthlyPLN": 176,
+      "dataYear": "2023"
+    },
+    {
+      "label": "Other goods & services",
+      "coicop": "CP12",
+      "monthlyPLN": 544,
+      "dataYear": "2023"
+    }
   ]
 }
