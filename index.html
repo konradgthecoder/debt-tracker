@@ -121,6 +121,20 @@ body {
 .onboard-x { position: absolute; top: 0.5rem; right: 0.7rem; background: none; border: none; color: var(--dim); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0; }
 .onboard-x:hover { color: var(--text); }
 
+/* ─── Section nav (sticky jump-to bar) ─── */
+.section-nav {
+  position: sticky; top: 0; z-index: 90;
+  display: flex; gap: 0.4rem; flex-wrap: wrap;
+  background: var(--navy); padding: 0.7rem 0 0.6rem; margin-bottom: -0.4rem;
+}
+.sn-link {
+  padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--border2);
+  background: transparent; color: var(--muted); font-size: 0.75rem; font-weight: 600;
+  cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.12s;
+}
+.sn-link:hover { border-color: var(--teal); color: var(--teal); }
+.sn-link.active { background: rgba(15,184,160,0.15); color: var(--teal); border-color: rgba(15,184,160,0.4); }
+
 /* ─── Toast ─── */
 .toast {
   position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(4px);
@@ -169,6 +183,7 @@ th.sort-desc::after { content: ' ↓'; color: var(--teal); }
 th:first-child, td:first-child { min-width: 200px; width: 200px; }
 th:nth-child(2), td:nth-child(2) { min-width: 120px; width: 120px; }
 th.num, td.num { text-align: right; }
+td.num { white-space: nowrap; }
 td { padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
 tr.total-row td { background: var(--card2); font-weight: 700; border-top: 1px solid var(--border2); }
@@ -553,6 +568,9 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   /* stack the savings-target label+input pairs so they don't crowd on a narrow screen */
   .sv-targets { flex-direction: column; gap: 0.6rem; }
   .sv-targets > span { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  /* nav pins just under the sticky top ribbon (height measured into --ribbon-h) and
+     scrolls horizontally so the pills never wrap into a tall block */
+  .section-nav { top: var(--ribbon-h, 92px); flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 /* overflow-x: clip prevents horizontal overflow WITHOUT making body a scroll
    container — using `hidden` here would silently break position: sticky/fixed
@@ -692,6 +710,16 @@ html, body { max-width: 100%; overflow-x: clip; }
 
 <main>
 
+  <!-- SECTION NAV (sticky jump-to bar) -->
+  <nav class="section-nav" id="section-nav" aria-label="Jump to section">
+    <button class="sn-link" data-target="debts"      onclick="scrollToSection('debts')">Debts</button>
+    <button class="sn-link" data-target="costs"       onclick="scrollToSection('costs')">Costs</button>
+    <button class="sn-link" data-target="snapshot"    onclick="scrollToSection('snapshot')">Snapshot</button>
+    <button class="sn-link" data-target="projection"  onclick="scrollToSection('projection')">Plan</button>
+    <button class="sn-link" data-target="log"         onclick="scrollToSection('log')">Log</button>
+    <button class="sn-link" data-target="insights"    onclick="scrollToSection('insights')">AI</button>
+  </nav>
+
   <!-- ONBOARDING (first run / empty state) -->
   <div id="onboard" class="onboard" style="display:none">
     <button class="onboard-x" onclick="dismissOnboard()" title="Dismiss" aria-label="Dismiss">×</button>
@@ -715,7 +743,7 @@ html, body { max-width: 100%; overflow-x: clip; }
     </div>
     <p class="scroll-hint">‹ swipe the table sideways for rate, months left &amp; payoff ›</p>
     <div class="table-wrap">
-      <table style="table-layout:fixed;min-width:972px">
+      <table style="table-layout:fixed;min-width:1092px">
         <colgroup>
           <col style="width:24px">
           <col style="width:200px">
@@ -723,6 +751,7 @@ html, body { max-width: 100%; overflow-x: clip; }
           <col style="width:140px">
           <col style="width:90px">
           <col style="width:150px">
+          <col style="width:120px">
           <col style="width:100px">
           <col style="width:90px">
           <col style="width:38px">
@@ -2108,6 +2137,45 @@ function recalc() {
 const SEC_STORAGE = 'debt_tracker_sections';
 function loadSecState() { try { return JSON.parse(localStorage.getItem(SEC_STORAGE) || '{}'); } catch { return {}; } }
 function saveSecState(st) { localStorage.setItem(SEC_STORAGE, JSON.stringify(st)); }
+// ─── Section nav (sticky jump-to bar) ──────────────────────────────────────
+function scrollToSection(key) {
+  const sec = document.querySelector(`section[data-sec="${key}"]`);
+  if (!sec) return;
+  // expand the section if it was collapsed so the jump lands on real content
+  if (sec.classList.contains('collapsed')) {
+    sec.classList.remove('collapsed');
+    const st = loadSecState(); st[key] = false; saveSecState(st);
+    const tb = sec.querySelector('.sec-toggle'); if (tb) tb.setAttribute('aria-expanded', 'true');
+  }
+  const nav = document.getElementById('section-nav');
+  const offset = (nav ? nav.getBoundingClientRect().bottom : 0) + 8;
+  const y = sec.getBoundingClientRect().top + window.scrollY - offset;
+  window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+}
+
+function initSectionNav() {
+  const links = [...document.querySelectorAll('.sn-link')];
+  // measure the (mobile) sticky ribbon so the nav can pin just below it
+  const setRibbonH = () => {
+    const r = document.querySelector('.ribbon');
+    if (r) document.documentElement.style.setProperty('--ribbon-h', r.offsetHeight + 'px');
+  };
+  setRibbonH();
+  window.addEventListener('resize', setRibbonH);
+  // highlight whichever section is near the top of the viewport
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const key = e.target.dataset.sec;
+          links.forEach(l => l.classList.toggle('active', l.dataset.target === key));
+        }
+      });
+    }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+    document.querySelectorAll('section[data-sec]').forEach(s => obs.observe(s));
+  }
+}
+
 function toggleSection(key) {
   const sec = document.querySelector(`section[data-sec="${key}"]`);
   if (!sec) return;
@@ -3691,6 +3759,7 @@ window.addEventListener('resize', () => {
 
 renderAll();
 initSections();
+initSectionNav();
 loadBenchmarks();
 
 // initial cloud-sync state + pull latest once on load
