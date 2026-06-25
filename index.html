@@ -87,6 +87,17 @@ body {
 .btn-danger { background: rgba(244,86,106,0.12); color: var(--coral); border-color: rgba(244,86,106,0.3); }
 .btn-danger:hover { background: rgba(244,86,106,0.22); }
 
+/* Desktop: ribbon becomes a fixed bottom "where I stand" readout bar.
+   Mobile (≤620px) keeps it as a sticky top bar — see the mobile media query. */
+@media (min-width: 621px) {
+  .ribbon {
+    position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+    border-bottom: none; border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
+  }
+  /* clear the fixed bar so the last section isn't hidden behind it (bar ≈ 4rem tall) */
+  main { padding-bottom: 6rem; }
+}
 .ribbon-stats { display: flex; gap: 2rem; flex-wrap: wrap; }
 .ribbon-stat { display: flex; flex-direction: column; align-items: flex-end; }
 .ribbon-stat .label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 0.1rem; }
@@ -543,7 +554,10 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   .sv-targets { flex-direction: column; gap: 0.6rem; }
   .sv-targets > span { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 }
-html, body { max-width: 100%; overflow-x: hidden; }
+/* overflow-x: clip prevents horizontal overflow WITHOUT making body a scroll
+   container — using `hidden` here would silently break position: sticky/fixed
+   on the ribbon in some engines. */
+html, body { max-width: 100%; overflow-x: clip; }
 
 /* ─── Data backup/restore modal ─── */
 .modal-overlay {
@@ -2242,7 +2256,7 @@ function renderAllocation() {
   rawPc.map((v, i) => [v - pcts[i], i]).sort((a, b) => b[0] - a[0])
     .forEach(([, i]) => { if (rem > 0) { pcts[i]++; rem--; } });
   legend.innerHTML = shown.map((s, i) => `
-    <div class="alloc-leg-row" data-idx="${i}" onmouseenter="allocHover(${i})" onmouseleave="allocHover(-1)">
+    <div class="alloc-leg-row" data-idx="${i}" onmouseenter="allocHover(${i})">
       <span class="sw" style="background:${s.color}"></span>
       <span class="nm">${s.label}</span>
       <span class="amt">${fmt0(s.value)}</span>
@@ -2254,6 +2268,10 @@ function renderAllocation() {
     canvas.addEventListener('mousemove', allocCanvasMove);
     canvas.addEventListener('mouseleave', () => allocHover(-1));
     canvas._wired = true;
+  }
+  if (!legend._wired) {
+    legend.addEventListener('mouseleave', () => allocHover(-1));
+    legend._wired = true;
   }
 
   // financial-health ratio bars (always shown when income is set)
