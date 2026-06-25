@@ -896,7 +896,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
         <input id="ai-key" type="password" class="insights-key-input" placeholder="sk-ant-…" oninput="saveApiKey(this.value)">
         <span class="insights-key-hint">stored locally, never exported</span>
       </div>
-      <button class="btn btn-primary insights-btn" onclick="runInsights()" id="insights-btn">✦ Analyze my finances</button>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary insights-btn" onclick="runInsights()" id="insights-btn">✦ Analyze my finances</button>
+        <button class="btn btn-ghost" onclick="refreshBenchmarks()" title="Re-fetch peer spending benchmarks via GitHub Action">↻ Refresh benchmarks</button>
+      </div>
       <div id="insights-output" class="insights-output" style="display:none"></div>
 
       <div class="chat-section" id="chat-section" style="display:none; border-top: 1px solid var(--border); padding-top: 1rem;">
@@ -2115,6 +2118,28 @@ function allocCanvasMove(e) {
 const PROJ_STORAGE = 'debt_tracker_proj';
 let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, split: 0.30 };
 
+// ─── Peer spending benchmarks (baked benchmarks.json, refreshed via GitHub Action) ──
+const BENCHMARK_REPO = 'konradgthecoder/debt-tracker';
+let benchmarks = null;
+async function loadBenchmarks() {
+  try { const r = await fetch('benchmarks.json?t=' + Date.now()); if (r.ok) benchmarks = await r.json(); } catch {}
+}
+async function refreshBenchmarks() {
+  const token = syncToken();
+  if (!token) { toast('Connect cloud sync first — the refresh uses your GitHub token', 'err'); openDataModal(); return; }
+  toast('Starting benchmark refresh…', 'ok');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${BENCHMARK_REPO}/actions/workflows/benchmarks.yml/dispatches`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: 'main' }),
+    });
+    if (res.status === 204) { toast('Benchmark refresh running on GitHub — reload in ~2 min to pick up new figures', 'ok'); }
+    else if (res.status === 403 || res.status === 404) { toast('Refresh denied — your token needs Actions:Read+Write on the app repo too', 'err'); }
+    else { toast('Refresh failed: HTTP ' + res.status, 'err'); }
+  } catch (e) { toast('Refresh failed: ' + e.message, 'err'); }
+}
+
 // emergency-fund target (PLN) = N months of total outgoings (matches Runway's basis)
 function efTarget() {
   const obligations = (_calc.totalMin || 0) + ((S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0));
@@ -2677,6 +2702,17 @@ function trendSummary() {
   return `\nSPENDING & PAYDOWN TRENDS (from monthly commits, oldest → newest)\n${rows}\nChange over ${span}: ${deltas.length ? deltas.join('; ') : 'little movement yet'}.\n`;
 }
 
+// peer spending benchmarks (per-person monthly PLN) for the lifestyle section
+function benchmarkSummary() {
+  if (!benchmarks || !benchmarks.categories?.length) return '\nPEER SPENDING BENCHMARKS: none loaded.\n';
+  const lines = benchmarks.categories.map(c => `  - ${c.label}: ~${c.monthlyPLN} PLN`).join('\n');
+  return `\nPEER SPENDING BENCHMARKS (${benchmarks.basis}${benchmarks.approxSeed ? ', approximate seed' : ''})
+Source to cite briefly: ${benchmarks.sources.join('; ')} (${benchmarks.generatedAt})
+${lines}
+Caveat: ${benchmarks.note}
+`;
+}
+
 // ─── Restore inputs & init ─────────────────────────────────────────────────
 function restoreInputs() {
   const fmtInp = v => v ? Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
@@ -3003,6 +3039,7 @@ ${['fixed','variable','sinking'].map(kind => {
   }).filter(Boolean).join('\n') || '  none'}
 ${projectionSummary()}
 ${trendSummary()}
+${benchmarkSummary()}
 IMPORTANT CONTEXT
 - My free cash is OVERSTATED. The fixed costs above are incomplete — they only reflect what I've explicitly tracked.
 - I am a person in my late 20s living in Poland. Think about what a real person spends money on that I have NOT listed at all as a category. Common examples: clothing, haircuts/grooming, medical/pharmacy, dining out / bars, coffee, gifts, holidays/travel, car maintenance, home supplies, subscriptions I forgot to list, etc.
@@ -3015,7 +3052,8 @@ Please give me:
 2. **Budget split for this month** — table: category | amount | notes. Must add up to realistic free cash. Include savings buffer, overpayment, and discretionary.
 3. **Which debt to overpay and by how much** — based on realistic free cash, not stated free cash.
 4. **Top 2 budget categories to add** — the missing expenses that would most change the plan once tracked properly.
-5. **Reality-check my projection** — the tracker's projected debt-free dates above assume I deploy the full simulated overpayment. Given the hidden costs you identified, is that overpayment realistic? If not, roughly how much later do those dates slip?
+5. **Reality-check my projection** — the tracker's projected debt-free dates above assume I deploy the full simulated overpayment. Given the hidden costs you identified, is that overpayment realistic? If not, roughly how much later do those dates slip? Reference my month-over-month trends if relevant.
+6. **Suggested lifestyle changes** — compare my budgeted spend per category to the PEER SPENDING BENCHMARKS above. Map my category names to the closest benchmark yourself (e.g. "Eating out & bars" → restaurants/dining); skip any category with no matching benchmark and say so in one line. Present a markdown table: | Category | My budget /mo | Peer avg /mo | vs peers | Note |. Flag BOTH over-spend (e.g. "you budget a lot here vs people your age") AND unrealistic under-spend (e.g. budgeting 0 for something peers spend on). Remember the benchmarks are national per-capita — nudge them up for Warsaw and for a single person in their late 20s before judging. Put ONE short source line under the table (don't cite every row). Then 2–3 prioritised, concrete suggestions starting with the biggest gap, and weave in my trends ("you've already trimmed X over the last N months").
 
 Be direct, use specific PLN amounts, keep it tight.`;
 }
@@ -3129,6 +3167,7 @@ window.addEventListener('resize', () => {
 
 renderAll();
 initSections();
+loadBenchmarks();
 
 // initial cloud-sync state + pull latest once on load
 updateSyncUI();
