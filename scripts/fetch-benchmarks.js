@@ -42,12 +42,26 @@ const COICOP = [
 
 const EUROSTAT = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data';
 
-async function getJSON(url) {
-  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url} :: ${text.replace(/\s+/g,' ').slice(0, 600)}`);
-  try { return JSON.parse(text); }
-  catch (e) { throw new Error(`non-JSON (ct=${res.headers.get('content-type')}) from ${url} :: ${text.replace(/\s+/g,' ').slice(0, 600)}`); }
+const UA = 'Mozilla/5.0 (compatible; debt-tracker-benchmarks/1.0; +https://github.com/konradgthecoder/debt-tracker)';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function getJSON(url, tries = 4) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': UA } });
+      const text = await res.text();
+      if (res.ok) {
+        try { return JSON.parse(text); }
+        catch { throw new Error(`non-JSON (ct=${res.headers.get('content-type')}) :: ${text.replace(/\s+/g,' ').slice(0,300)}`); }
+      }
+      last = new Error(`HTTP ${res.status} :: ${text.replace(/\s+/g,' ').slice(0,200)}`);
+      // 5xx / "temporarily unavailable" → retry with backoff
+      if (res.status < 500 && res.status !== 429) break;
+    } catch (e) { last = e; }
+    if (i < tries - 1) { console.warn(`  retry ${i + 1}/${tries - 1} after error: ${last.message.slice(0,120)}`); await sleep(3000 * (i + 1)); }
+  }
+  throw new Error(`${url} :: ${last && last.message}`);
 }
 
 // pull the latest non-null value for each COICOP from a JSON-stat response
