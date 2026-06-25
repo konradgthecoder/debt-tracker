@@ -1,0 +1,31 @@
+name: Refresh benchmarks
+
+on:
+  workflow_dispatch:        # manual trigger (also from the app's "Refresh benchmarks" button)
+  schedule:
+    - cron: '0 3 1 1,7 *'   # twice a year (Jan 1 & Jul 1, 03:00 UTC)
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Fetch benchmarks
+        run: node scripts/fetch-benchmarks.js
+      - name: Commit if changed
+        run: |
+          git config user.name  "benchmark-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- benchmarks.json; then
+            echo "benchmarks.json unchanged"
+          else
+            git add benchmarks.json
+            git commit -m "chore: refresh benchmarks.json [skip ci]"
+            git push
+          fi
