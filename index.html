@@ -115,6 +115,12 @@ main > section { min-width: 0; }
 
 .section-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.9rem; }
 .section-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); white-space: nowrap; }
+.sec-toggle { display: inline-flex; align-items: center; gap: 0.5rem; background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; }
+.sec-chevron { color: var(--dim); font-size: 0.7rem; transition: transform 0.15s; display: inline-block; }
+section.collapsed .sec-chevron { transform: rotate(-90deg); }
+section.collapsed > .section-head { margin-bottom: 0; }
+section.collapsed > :not(.section-head) { display: none !important; }
+.sec-toggle:hover .section-title, .sec-toggle:hover .sec-chevron { color: var(--teal); }
 .section-line { flex: 1; height: 1px; background: var(--border); }
 .section-action { font-size: 0.72rem; }
 
@@ -598,7 +604,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 <main>
 
   <!-- DEBTS -->
-  <section>
+  <section data-sec="debts">
     <div class="section-head">
       <span class="section-title">Debts</span>
       <div class="section-line"></div>
@@ -645,7 +651,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   </section>
 
   <!-- MONTHLY COSTS -->
-  <section>
+  <section data-sec="costs">
     <div class="section-head">
       <span class="section-title">Monthly costs</span>
       <div class="section-line"></div>
@@ -683,7 +689,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   </section>
 
   <!-- SNAPSHOT -->
-  <section>
+  <section data-sec="snapshot">
     <div class="section-head">
       <span class="section-title">Monthly snapshot</span>
       <div class="section-line"></div>
@@ -758,7 +764,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   </section>
 
   <!-- MONTHLY LOG -->
-  <section>
+  <section data-sec="log">
     <div class="section-head">
       <span class="section-title">Monthly log</span>
       <div class="section-line"></div>
@@ -787,7 +793,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   </section>
 
   <!-- PROJECTION -->
-  <section id="proj-section">
+  <section id="proj-section" data-sec="projection">
     <div class="section-head">
       <span class="section-title">Payoff projection</span>
       <div class="section-line"></div>
@@ -879,7 +885,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   </section>
 
   <!-- AI INSIGHTS -->
-  <section id="insights-section">
+  <section id="insights-section" data-sec="insights">
     <div class="section-head">
       <span class="section-title">AI Insights</span>
       <div class="section-line"></div>
@@ -1332,9 +1338,9 @@ function updateSyncUI() {
 
 // ─── Debt table ────────────────────────────────────────────────────────────
 const GROUPS = [
+  { key: 'mortgage', label: 'Mortgage',         badge: 'badge-zero',     addLabel: '+ add mortgage' },
   { key: 'interest', label: 'Interest loans',  badge: 'badge-interest', addLabel: '+ add interest loan' },
   { key: 'zero',     label: '0% instalments',  badge: 'badge-zero',     addLabel: '+ add 0% loan' },
-  { key: 'mortgage', label: 'Mortgage',         badge: 'badge-zero',     addLabel: '+ add mortgage' },
   { key: 'foreign',  label: 'Foreign debt',     badge: 'badge-foreign',  addLabel: '+ add foreign debt' },
 ];
 const collapsed = { interest: false, zero: false, mortgage: false, foreign: false };
@@ -1890,6 +1896,37 @@ function recalc() {
 
   renderProjection();
   renderAllocation();
+}
+
+// ─── Collapsible sections (per-device UI pref, not synced) ──────────────────
+const SEC_STORAGE = 'debt_tracker_sections';
+function loadSecState() { try { return JSON.parse(localStorage.getItem(SEC_STORAGE) || '{}'); } catch { return {}; } }
+function saveSecState(st) { localStorage.setItem(SEC_STORAGE, JSON.stringify(st)); }
+function toggleSection(key) {
+  const sec = document.querySelector(`section[data-sec="${key}"]`);
+  if (!sec) return;
+  const collapsed = !sec.classList.contains('collapsed');
+  sec.classList.toggle('collapsed', collapsed);
+  const st = loadSecState(); st[key] = collapsed; saveSecState(st);
+}
+function initSections() {
+  const st = loadSecState();
+  document.querySelectorAll('section[data-sec]').forEach(sec => {
+    const key = sec.dataset.sec;
+    const head = sec.querySelector('.section-head');
+    const title = head && head.querySelector('.section-title');
+    if (title && !head.querySelector('.sec-toggle')) {
+      const btn = document.createElement('button');
+      btn.className = 'sec-toggle'; btn.type = 'button';
+      btn.setAttribute('aria-label', 'Collapse / expand section');
+      btn.onclick = () => toggleSection(key);
+      const chev = document.createElement('span');
+      chev.className = 'sec-chevron'; chev.textContent = '▾';
+      title.parentNode.insertBefore(btn, title);
+      btn.appendChild(chev); btn.appendChild(title);
+    }
+    if (st[key]) sec.classList.add('collapsed');
+  });
 }
 
 // ─── Income allocation donut ────────────────────────────────────────────────
@@ -2882,14 +2919,14 @@ INCOME & SAVINGS
 
 DEBT BREAKDOWN (total: ${fmtN(totalDebt)} PLN)
 
+Mortgage:
+${debtLines(groups.mortgage, false) || '  none'}
+
 Interest loans:
 ${debtLines(groups.interest, false) || '  none'}
 
 0% instalments:
 ${debtLines(groups.zero, false) || '  none'}
-
-Mortgage:
-${debtLines(groups.mortgage, false) || '  none'}
 
 Foreign debt (CAD, rate: ${cadRate ? cadRate.toFixed(4) + ' PLN/CAD' : 'unknown'}):
 ${debtLines(groups.foreign, true) || '  none'}
@@ -3030,6 +3067,7 @@ window.addEventListener('resize', () => {
 });
 
 renderAll();
+initSections();
 
 // initial cloud-sync state + pull latest once on load
 updateSyncUI();
