@@ -854,12 +854,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
             <input type="text" inputmode="decimal" class="sim-extra-input" id="sim-extra" value="0" onchange="onExtraInput(this.value)">
             <span class="insights-label">PLN</span>
           </div>
-          <div class="sim-row">
-            <label class="insights-label">Of the extra, save</label>
-            <input type="range" class="sim-slider" id="sim-split" min="0" max="100" value="30" style="max-width:160px" oninput="onSplitInput(this.value)">
-            <span class="insights-label" id="sim-split-label">30%</span>
-            <span class="sim-marker">to emergency fund until it's full, rest to debt</span>
-          </div>
+          <span class="sim-marker">Your extra cascades by priority: starter buffer → high-interest debt → emergency fund → savings goal → low-rate debt. Set targets in the Savings section.</span>
           <span class="sim-marker" id="sim-marker"></span>
         </div>
         <div class="sim-stats">
@@ -2124,7 +2119,7 @@ function allocCanvasMove(e) {
 
 // ─── Payoff projection engine ──────────────────────────────────────────────
 const PROJ_STORAGE = 'debt_tracker_proj';
-let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, split: 0.30 };
+let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, starterMonths: 1, savingsGoal: 0, parallel: false, apy: 5 };
 
 // ─── Peer spending benchmarks (baked benchmarks.json, refreshed via GitHub Action) ──
 const BENCHMARK_REPO = 'konradgthecoder/debt-tracker';
@@ -2148,16 +2143,24 @@ async function refreshBenchmarks() {
   } catch (e) { toast('Refresh failed: ' + e.message, 'err'); }
 }
 
-// emergency-fund target (PLN) = N months of total outgoings (matches Runway's basis)
-function efTarget() {
-  const obligations = (_calc.totalMin || 0) + ((S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0));
-  return obligations * (projState.efMonths || 0);
+// monthly outgoings = debt minimums + all monthly costs (matches Runway's basis)
+function monthlyOutgoings() {
+  return (_calc.totalMin || 0) + ((S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0));
 }
-// savings options for the engine; null when there's no target so behaviour is unchanged
+function efTarget()      { return monthlyOutgoings() * (projState.efMonths || 0); }      // full emergency fund
+function starterTarget() { return monthlyOutgoings() * (projState.starterMonths || 0); } // starter buffer
+
+// waterfall options for the engine; null when there's nothing to allocate beyond debt
 function simOpts() {
-  const target = efTarget();
-  if (!(target > 0)) return null;
-  return { savings: parseFloat(S.savings) || 0, target, split: projState.split || 0 };
+  const fullTarget = efTarget(), starter = starterTarget(), goal = projState.savingsGoal || 0;
+  if (!(fullTarget > 0) && !(starter > 0) && !(goal > 0)) return null;
+  return {
+    savings: parseFloat(S.savings) || 0,
+    starterTarget: starter,
+    fullTarget,
+    savingsGoal: goal,
+    parallel: !!projState.parallel,
+  };
 }
 
 function loadProjState() {
@@ -2246,6 +2249,10 @@ function projDebts() {
   }).filter(d => d.bal > 0);
 }
 
+// debts at/above this rate are "high interest" — paying them beats a realistic savings yield,
+// so the waterfall attacks them before topping up the full emergency fund or investing.
+const HI_RATE = 8;
+
 function orderDebts(debts, strategy) {
   const arr = debts.map((d, i) => ({ ...d, _i: i }));
   if (strategy === 'avalanche') arr.sort((a, b) => b.rate - a.rate || a.bal - b.bal);
@@ -2268,69 +2275,80 @@ function simulate(debts, extra, strategy, opts) {
   const MAX = 1200;
 
   let savings = opts ? (opts.savings || 0) : 0;
-  const target = opts ? (opts.target || 0) : 0;
-  const split  = opts ? (opts.split || 0)  : 0;
-  let fundFullMonth = (opts && savings >= target - 0.005 && target > 0) ? 0 : null;
+  const starterTgt = opts ? (opts.starterTarget || 0) : 0;
+  const fullTgt    = opts ? (opts.fullTarget || 0)    : 0;
+  const goal       = opts ? (opts.savingsGoal || 0)   : 0;
+  const parallel   = opts ? !!opts.parallel           : false;
+  let fundFullMonth = (opts && fullTgt > 0 && savings >= fullTgt - 0.005) ? 0 : null;
   const savingsSeries = [savings];
+
+  // pay `amt` across active debts in strategy order; hiOnly restricts to high-interest. returns leftover.
+  const payDebt = (amt, hiOnly) => {
+    let d = amt;
+    for (const debt of state) {
+      if (d <= 0) break;
+      if (debt.bal <= 0.005) continue;
+      if (hiOnly && debt.rate < HI_RATE) continue;
+      const p = Math.min(debt.bal, d); debt.bal -= p; d -= p;
+    }
+    return d;
+  };
 
   for (let m = 1; m <= MAX; m++) {
     const active = state.filter(d => d.bal > 0.005);
     if (!active.length) { fullyMonth = fullyMonth ?? m - 1; savingsSeries.push(savings); break; }
 
-    // 1. accrue interest
+    // accrue interest
     active.forEach(d => { const i = d.bal * (d.rate / 100 / 12); d.bal += i; totalInterest += i; });
 
-    // 1b. divert part of the extra to the emergency fund until it's full
-    let debtExtra = extra;
-    if (opts && savings < target - 0.005) {
-      let toSavings = extra * split;
-      const room = target - savings;
-      if (toSavings > room) toSavings = room;
-      savings += toSavings;
-      debtExtra = extra - toSavings;
-      if (fundFullMonth === null && savings >= target - 0.005) fundFullMonth = m;
+    // mandatory minimums on every active debt
+    active.forEach(d => { const p = Math.min(d.min, d.bal); d.bal -= p; });
+
+    // deployable cash this month = the user's discretionary extra. (Freed minimums from a
+    // cleared debt are NOT auto-redirected — that would assume effort the user isn't committing.)
+    let d = extra;
+
+    if (opts) {
+      // ── priority waterfall ──
+      // 2. starter buffer
+      if (savings < starterTgt - 0.005) { const a = Math.min(d, starterTgt - savings); savings += a; d -= a; }
+      // 5p. savings goal in parallel (only if toggle on)
+      if (parallel && goal > 0 && d > 0) { const a = Math.min(d, goal); savings += a; d -= a; }
+      // 3. high-interest debt (rate ≥ HI_RATE)
+      d = payDebt(d, true);
+      // 4. full emergency fund
+      if (savings < fullTgt - 0.005 && d > 0) { const a = Math.min(d, fullTgt - savings); savings += a; d -= a; }
+      // 5. savings goal once EF is full (non-parallel)
+      if (!parallel && goal > 0 && savings >= fullTgt - 0.005 && d > 0) { const a = Math.min(d, goal); savings += a; d -= a; }
+      // 6. remaining to any debt (low-rate / 0%)
+      d = payDebt(d, false);
+      // leftover with no debt left → savings
+      if (d > 0) savings += d;
+      if (fundFullMonth === null && fullTgt > 0 && savings >= fullTgt - 0.005) fundFullMonth = m;
+    } else {
+      payDebt(d, false); // no waterfall: all deployable to debt (original behaviour)
     }
 
-    // 2. budget = all minimums (of active) + debt's share of the extra
-    let budget = active.reduce((s, d) => s + d.min, 0) + debtExtra;
+    state.forEach(x => { if (x.bal < 0.005) x.bal = 0; });
 
-    // 3. pay minimums
-    active.forEach(d => { const p = Math.min(d.min, d.bal, budget); d.bal -= p; budget -= p; });
-
-    // 4. cascade remaining onto highest-priority active debt
-    for (const d of active) {
-      if (budget <= 0) break;
-      if (d.bal <= 0.005) continue;
-      const p = Math.min(d.bal, budget);
-      d.bal -= p; budget -= p;
-    }
-
-    state.forEach(d => { if (d.bal < 0.005) d.bal = 0; });
-
-    // milestones
-    if (consumerMonth === null && state.filter(d => !d.isMortgage).every(d => d.bal <= 0.005))
-      consumerMonth = m;
-    const tot = state.reduce((s, d) => s + d.bal, 0);
+    if (consumerMonth === null && state.filter(x => !x.isMortgage).every(x => x.bal <= 0.005)) consumerMonth = m;
+    const tot = state.reduce((s, x) => s + x.bal, 0);
     series.push(tot);
     savingsSeries.push(savings);
 
-    if (state.every(d => d.bal <= 0.005)) { fullyMonth = m; break; }
-    // divergence guard: a positive-rate debt with too small a payment grows without bound
-    if (tot > start * 1.5 && m > 12) { fullyMonth = null; break; }
+    if (state.every(x => x.bal <= 0.005)) { fullyMonth = m; break; }
+    if (tot > start * 1.5 && m > 12) { fullyMonth = null; break; } // divergence guard
   }
 
-  // Post-payoff: once debt is cleared, the whole monthly capacity (freed minimums
-  // + extra) pours into savings until the emergency fund is full.
-  if (opts && fullyMonth != null && fundFullMonth === null && savings < target - 0.005) {
+  // Post-payoff: once all debt is cleared, the freed minimums + extra are genuinely
+  // available, so the whole amount tops up the EF until it's full.
+  if (opts && fullyMonth != null && savings < fullTgt - 0.005) {
     const capacity = Math.max(startMin + extra, 1);
     let m = fullyMonth;
-    while (savings < target - 0.005 && m < MAX) {
-      m++;
-      savings += capacity;
-      if (savings > target) savings = target;
-      series.push(0);
-      savingsSeries.push(savings);
-      if (savings >= target - 0.005) { fundFullMonth = m; break; }
+    while (savings < fullTgt - 0.005 && m < MAX) {
+      m++; savings += capacity; if (savings > fullTgt) savings = fullTgt;
+      series.push(0); savingsSeries.push(savings);
+      if (savings >= fullTgt - 0.005) { fundFullMonth = fundFullMonth ?? m; break; }
     }
   }
 
@@ -2371,9 +2389,6 @@ function renderProjection() {
   slider.value = Math.round(projState.extra);
   extraInp.value = projState.extra.toLocaleString('en-US', { maximumFractionDigits: 0 });
   stratSel.value = projState.strategy;
-  const splitSlider = document.getElementById('sim-split');
-  splitSlider.value = Math.round((projState.split || 0) * 100);
-  document.getElementById('sim-split-label').textContent = Math.round((projState.split || 0) * 100) + '%';
   const efInp = document.getElementById('s-ef-months');
   if (efInp && document.activeElement !== efInp) efInp.value = projState.efMonths;
 
@@ -2412,11 +2427,7 @@ function renderProjection() {
   const fundEl = document.getElementById('sim-fund');
   if (!opts) fundEl.textContent = 'set target';
   else if (sim.fundFullMonth === 0) fundEl.textContent = 'already met';
-  else if (sim.fundFullMonth != null) {
-    fundEl.textContent = monthsToDate(sim.fundFullMonth);
-    fundEl.style.fontSize = '';
-  }
-  else if (projState.split <= 0) fundEl.textContent = 'raise split %';
+  else if (sim.fundFullMonth != null) fundEl.textContent = monthsToDate(sim.fundFullMonth);
   else if (sim.fullyMonth == null) fundEl.textContent = 'after debt clears';
   else fundEl.textContent = 'beyond horizon';
   if (noMinDebt) {
@@ -2645,11 +2656,10 @@ function toggleZoom() {
   document.getElementById('proj-zoom').textContent = 'Zoom: ' + (projState.zoom === 'consumer' ? 'consumer window' : 'full horizon');
   saveProjState(); renderProjection();
 }
-function onSplitInput(v) {
-  projState.split = Math.max(0, Math.min(1, (parseFloat(v) || 0) / 100));
-  document.getElementById('sim-split-label').textContent = Math.round(projState.split * 100) + '%';
-  saveProjState(); renderProjection();
-}
+function onStarterMonths(v) { projState.starterMonths = Math.max(0, parseNum(v) || 0); saveProjState(); recalc(); }
+function onSavingsGoal(v)   { projState.savingsGoal = Math.max(0, parseNum(v) || 0); saveProjState(); recalc(); }
+function onParallelToggle(checked) { projState.parallel = !!checked; saveProjState(); recalc(); }
+function onApy(v)           { projState.apy = Math.max(0, Math.min(30, parseNum(v) || 0)); saveProjState(); renderProjection(); }
 function onEfMonths(v) {
   projState.efMonths = Math.max(0, parseNum(v) || 0);
   saveProjState(); recalc();
@@ -2662,17 +2672,16 @@ function projectionSummary() {
   const opts = simOpts();
   const sim = simulate(debts, projState.extra || 0, projState.strategy, opts);
   const order = orderDebts(debts, projState.strategy).map(d => d.name).join(' → ');
-  const target = efTarget();
-  const fundLine = opts
-    ? `- Emergency fund: target ${fmt(target)} (${projState.efMonths} months of outgoings), currently ${fmt(parseFloat(S.savings) || 0)}; of each ${fmt(projState.extra || 0)} extra, ${Math.round((projState.split||0)*100)}% goes to savings until the fund is full (${sim.fundFullMonth === 0 ? 'already met' : sim.fundFullMonth != null ? monthsToDate(sim.fundFullMonth) : 'not reached in horizon'}), the rest to debt`
-    : `- Emergency fund: no target set`;
+  const savingsLine = opts
+    ? `- Savings waterfall: starter buffer ${fmt(starterTarget())} (${projState.starterMonths}mo) → high-interest debt (≥${HI_RATE}%) → full emergency fund ${fmt(efTarget())} (${projState.efMonths}mo) → savings goal ${fmt(projState.savingsGoal || 0)}/mo${projState.parallel ? ' (funded IN PARALLEL with debt)' : ' (after EF is full)'} → extra on low-rate debt. Current savings ${fmt(parseFloat(S.savings) || 0)}; emergency fund full ${sim.fundFullMonth === 0 ? 'already' : sim.fundFullMonth != null ? monthsToDate(sim.fundFullMonth) : 'not within horizon'}.`
+    : `- Savings waterfall: no targets set yet.`;
   return `\nPAYOFF PROJECTION (computed by the tracker engine — reason about THESE numbers, do not re-derive)
 - Strategy: ${projState.strategy} (payoff order: ${order})
-- Simulated extra overpayment: ${fmt(projState.extra || 0)}/mo on top of all minimums
+- Simulated extra overpayment: ${fmt(projState.extra || 0)}/mo on top of all minimums, allocated by the priority waterfall below
 - Consumer debt-free (excl. mortgage): ${monthsToDate(sim.consumerMonth)}${sim.consumerMonth != null ? ` (${monthsLabel(sim.consumerMonth)})` : ''}
 - Fully debt-free (incl. mortgage): ${monthsToDate(sim.fullyMonth)}${sim.fullyMonth != null ? ` (${monthsLabel(sim.fullyMonth)})` : ''}
 - Total interest remaining under this plan: ${fmt(sim.totalInterest)}
-${fundLine}
+${savingsLine}
 `;
 }
 
