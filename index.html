@@ -102,7 +102,7 @@ body {
   background: var(--card2); border: 1px solid var(--border2); border-radius: 8px;
   padding: 0.5rem 1.1rem; font-size: 0.82rem; color: var(--text);
   opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 200;
-  white-space: nowrap;
+  max-width: calc(100vw - 2rem); text-align: center; line-height: 1.4;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.ok   { border-color: rgba(34,201,154,0.4); color: var(--green); }
@@ -126,6 +126,8 @@ section.collapsed > :not(.section-head) { display: none !important; }
 
 /* ─── Tables ─── */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; border: 1px solid var(--border); }
+.scroll-hint { display: none; font-size: 0.72rem; color: var(--dim); margin: 0 0 0.35rem; }
+@media (max-width: 620px) { .scroll-hint { display: block; } }
 .table-wrap table { min-width: 640px; }
 table { width: 100%; border-collapse: collapse; }
 thead tr { background: var(--card2); }
@@ -149,12 +151,14 @@ tr.group-child:hover td, #costs-body tr:hover td { background: var(--row-hover);
 
 /* ─── Editable cells ─── */
 .editable {
-  background: transparent; border: none; outline: none;
+  background: transparent; outline: none;
+  border: 1px solid transparent; border-radius: 5px;
   color: var(--text); font-family: inherit; font-size: inherit;
   font-variant-numeric: tabular-nums; width: 100%; text-align: right;
-  cursor: text;
+  cursor: text; padding: 0.1rem 0.3rem; transition: border-color 0.12s, background 0.12s;
 }
-.editable:focus { color: var(--teal); }
+.editable:hover { border-color: var(--border2); }
+.editable:focus { border-color: var(--teal); background: var(--card2); color: var(--text); }
 .editable.left { text-align: left; }
 .editable::placeholder { color: var(--dim); }
 
@@ -193,6 +197,8 @@ td.num, td.num .editable, td.num.computed {
 }
 tr:hover .del-btn { opacity: 1; }
 .del-btn:hover { color: var(--coral); }
+/* touch devices have no hover — keep delete reachable */
+@media (hover: none) { .del-btn { opacity: 0.5; } }
 
 /* group header rows */
 tr.group-header td {
@@ -651,6 +657,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <span class="section-title">Debts</span>
       <div class="section-line"></div>
     </div>
+    <p class="scroll-hint">‹ swipe the table sideways for rate, months left &amp; payoff ›</p>
     <div class="table-wrap">
       <table style="table-layout:fixed;min-width:972px">
         <colgroup>
@@ -1828,6 +1835,10 @@ function delCost(i) {
 function renderLog() {
   const tbody = document.getElementById('log-body');
   tbody.innerHTML = '';
+  if (!S.log.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--dim);padding:1.1rem 0.85rem">No months committed yet — hit <strong>📸 Commit this month</strong> above to start tracking your progress.</td></tr>`;
+    return;
+  }
   S.log.forEach((row, i) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -1966,7 +1977,9 @@ function recalc() {
   }
 
   // ribbon
-  document.getElementById('rib-total-debt').textContent  = totalBalance > 0 ? fmt(totalBalance) : '—';
+  const ribDebt = document.getElementById('rib-total-debt');
+  ribDebt.textContent = totalBalance > 0 ? fmt(totalBalance) : '—';
+  ribDebt.className = 'val ' + (totalBalance > 0 ? 'danger' : 'neutral');
   document.getElementById('rib-obligations').textContent = totalMin > 0     ? fmt(totalMin) + '/mo' : '—';
   const ribFree = document.getElementById('rib-free');
   if (free !== null) {
