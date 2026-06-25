@@ -272,6 +272,9 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .sv-bar.done .sv-bar-head .amt { color: var(--green); }
 .sv-targets { display: flex; gap: 1.1rem; flex-wrap: wrap; margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid var(--border); font-size: 0.74rem; color: var(--muted); }
 .sv-mini { width: 38px; text-align: center; padding: 0.1rem 0.2rem; margin: 0 0.15rem; }
+.rec-hint { font-size: 0.72rem; color: var(--dim); }
+.rec-use { color: var(--teal); cursor: pointer; text-decoration: underline; font-weight: 600; }
+.rec-use:hover { color: var(--green); }
 .snap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
 .snap-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: 0.9rem; }
 .snap-row .key { color: var(--muted); }
@@ -769,7 +772,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
           </div>
           <div class="snap-row">
             <span class="key">Monthly savings goal</span>
-            <span class="amt"><input class="editable" id="s-goal" type="text" inputmode="decimal" placeholder="0.00" style="text-align:right" oninput="onSavingsGoal(this.value)" onblur="reformatNum(this)"></span>
+            <span class="amt"><input class="editable" id="s-goal" type="text" inputmode="decimal" placeholder="0.00" style="text-align:right" oninput="onSavingsGoal(this.value)" onblur="reformatNum(this)"><div class="rec-hint" id="s-goal-rec" style="text-align:right"></div></span>
           </div>
           <div class="snap-row">
             <span class="key"><label style="cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem"><input type="checkbox" id="s-parallel" onchange="onParallelToggle(this.checked)" style="width:auto"> Fund goal in parallel with debt</label></span>
@@ -883,6 +886,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
             <input type="range" class="sim-slider" id="sim-slider" min="0" max="100" value="0" oninput="onSliderInput(this.value)">
             <input type="text" inputmode="decimal" class="sim-extra-input" id="sim-extra" value="0" onchange="onExtraInput(this.value)">
             <span class="insights-label">PLN</span>
+            <span class="rec-hint" id="sim-extra-rec"></span>
           </div>
           <span class="sim-marker">Your extra cascades by priority: starter buffer → high-interest debt → emergency fund → savings goal → low-rate debt. Set targets in the Savings section.</span>
           <span class="sim-marker" id="sim-marker"></span>
@@ -2018,6 +2022,14 @@ function renderSavings(runway, obligations, free) {
 
   document.getElementById('s-outgoings-note').textContent = obligations > 0 ? `· based on ${fmt(obligations)}/mo outgoings` : '';
 
+  // recommended savings goal hint (~20% of income)
+  const recG = recSavingsGoal(), goalRec = document.getElementById('s-goal-rec');
+  if (goalRec) {
+    if (recG <= 0) goalRec.textContent = '';
+    else if (Math.abs(goal - recG) < 1) goalRec.innerHTML = '✓ ~20% of income';
+    else goalRec.innerHTML = `Recommended ${fmt0(recG)} (20% of income) <span class="rec-use" onclick="useRecommended('goal')">use</span>`;
+  }
+
   // "you're here" — current waterfall tier
   const hereEl = document.getElementById('savings-here');
   if (!(fullTgt > 0) && !(goal > 0) && !(starterTgt > 0)) {
@@ -2270,6 +2282,16 @@ function simOpts() {
   };
 }
 
+// ── Recommended targets (suggestions only; the user clicks "use" to apply) ──
+// Deploy all realistic free cash; aim for a ~20%-of-income long-term savings rate.
+function recDeploy() { return Math.max(0, Math.round(_calc.free || 0)); }
+function recSavingsGoal() { return Math.round((0.20 * (S.income || 0)) / 50) * 50; }
+function fmt0(n) { return Math.round(n).toLocaleString('en-US'); }
+function useRecommended(which) {
+  if (which === 'extra') { projState.extra = recDeploy(); saveProjState(); renderProjection(); }
+  else if (which === 'goal') { projState.savingsGoal = recSavingsGoal(); saveProjState(); recalc(); }
+}
+
 function loadProjState() {
   try { Object.assign(projState, JSON.parse(localStorage.getItem(PROJ_STORAGE) || '{}')); } catch {}
 }
@@ -2498,6 +2520,14 @@ function renderProjection() {
   stratSel.value = projState.strategy;
   const efInp = document.getElementById('s-ef-months');
   if (efInp && document.activeElement !== efInp) efInp.value = projState.efMonths;
+
+  // recommended Deploy/mo hint (= realistic free cash)
+  const recE = recDeploy(), extraRec = document.getElementById('sim-extra-rec');
+  if (extraRec) {
+    if (recE <= 0) extraRec.textContent = '';
+    else if (Math.abs((projState.extra || 0) - recE) < 1) extraRec.innerHTML = '✓ all free cash';
+    else extraRec.innerHTML = `Recommended ${fmt0(recE)} <span class="rec-use" onclick="useRecommended('extra')">use</span>`;
+  }
 
   const opts = simOpts();
 
