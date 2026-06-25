@@ -465,8 +465,8 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   .insights-key-input { min-width: 0; }
   /* comfortable tap targets */
   .btn, .proj-tab, .ai-chip { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-  .editable, input.editable { font-size: 16px; } /* prevent iOS zoom-on-focus */
-  textarea.chat-textarea, .chat-memory-area, .sim-extra-input { font-size: 16px; }
+  /* iOS zooms when a focused control's font-size is < 16px — force 16px on every input/select/textarea */
+  input, select, textarea, .editable { font-size: 16px !important; }
 }
 html, body { max-width: 100%; overflow-x: hidden; }
 

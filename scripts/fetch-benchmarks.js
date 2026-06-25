@@ -130,8 +130,8 @@ async function main() {
   console.log('  population =', pop, '(', popYear, ')');
 
   console.log('Fetching household consumption by COICOP (Eurostat nama_10_co3_p3)…');
-  // current prices, million EUR, domestic concept (P31_S14)
-  const url = `${EUROSTAT}/nama_10_co3_p3?format=JSON&lang=en&freq=A&unit=CP_MEUR&na_item=P31_S14&geo=PL&sinceTimePeriod=2018`;
+  // current prices, million EUR (this dataset has no na_item dimension)
+  const url = `${EUROSTAT}/nama_10_co3_p3?format=JSON&lang=en&freq=A&unit=CP_MEUR&geo=PL&sinceTimePeriod=2018`;
   const js = await getJSON(url);
   const byCoicop = latestByCoicop(js);
   if (Object.keys(byCoicop).length < 6) throw new Error('too few COICOP values parsed — aborting to protect existing data');
