@@ -768,10 +768,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
     <div class="section-head">
       <span class="section-title">Monthly log</span>
       <div class="section-line"></div>
-      <button class="btn btn-ghost section-action" onclick="snapshotNow()">📸 Snapshot now</button>
+      <button class="btn btn-ghost section-action" onclick="snapshotNow()">📸 Commit this month</button>
     </div>
     <p style="font-size:0.78rem;color:var(--muted);margin:-0.3rem 0 0.6rem;">
-      Each month, edit your balances above as you pay down, then hit <strong>Snapshot now</strong> to freeze that month's totals here. Those snapshots become the amber dots on the projection chart — your actual progress against the plan.
+      When your numbers for the month look right, hit <strong>Commit this month</strong> to record a full snapshot — balances, costs by category, and totals. Commits become the amber dots on the projection chart and feed the AI's trend analysis. Committing again in the same month updates it.
     </p>
     <div class="table-wrap">
       <table class="log-table">
@@ -805,7 +805,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
           <span class="plan-strip-sub" id="plan-sub">Set your overpayment in the simulator below, then lock it as your plan to track against.</span>
         </div>
         <div class="plan-strip-actions" id="plan-actions">
-          <button class="plan-nudge" id="plan-nudge" style="display:none" onclick="snapshotNow()">📸 Log this month</button>
+          <button class="plan-nudge" id="plan-nudge" style="display:none" onclick="snapshotNow()">📸 Commit this month</button>
           <button class="btn btn-primary" id="plan-lock-btn" onclick="lockPlan()">Lock this plan</button>
           <button class="btn btn-ghost" id="plan-clear-btn" style="display:none" onclick="clearPlan()">Reset plan</button>
         </div>
@@ -1766,16 +1766,42 @@ function addLogRow(prefill = {}) {
 }
 function delLog(i) { S.log.splice(i, 1); persist(); renderLog(); }
 
+// capture a full breakdown of this month so the AI can analyse trends over time
+function snapshotDetail() {
+  const cadRate = S.cadRate || 0;
+  const byKind = { fixed: 0, variable: 0, sinking: 0 };
+  (S.costs || []).forEach(c => { const k = c.kind || 'fixed'; if (byKind[k] != null) byKind[k] += parseFloat(c.amount) || 0; });
+  return {
+    income: S.income || 0,
+    debts: (S.debts || []).map(d => {
+      const bal = parseFloat(d.balance) || 0;
+      return { name: d.name, type: d.type, balancePLN: d.type === 'foreign' && cadRate ? bal * cadRate : bal };
+    }),
+    costs: (S.costs || []).map(c => ({ name: c.name, kind: c.kind || 'fixed', amount: parseFloat(c.amount) || 0 })),
+    costsByKind: byKind,
+  };
+}
+
 function snapshotNow() {
-  const prefill = {
-    month:   nowLabel(),
+  const today = nowLabel();
+  // if this calendar month already has a commit, update it in place instead of duplicating
+  const existing = (S.log || []).find(r => r.month === today);
+  const base = {
+    month:   today,
     debt:    _calc.totalBalance || '',
     free:    _calc.free != null ? Math.round(_calc.free) : '',
     runway:  _calc.runway != null ? parseFloat(_calc.runway.toFixed(1)) : '',
     savings: S.savings || '',
+    detail:  snapshotDetail(),
   };
-  addLogRow(prefill);
-  toast('Snapshot added ✓', 'ok');
+  if (existing) {
+    Object.assign(existing, base);
+    persist(); renderLog();
+    toast('This month’s commit updated ✓', 'ok');
+  } else {
+    addLogRow(base);
+    toast('Month committed ✓', 'ok');
+  }
   document.getElementById('log-body').scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
@@ -2617,6 +2643,40 @@ ${fundLine}
 `;
 }
 
+// Summarise committed months so the AI can reason about trends over time.
+function trendSummary() {
+  const commits = (S.log || [])
+    .filter(r => r.detail)
+    .map(r => ({ abs: parseMonthAbs(r.month), month: r.month, r }))
+    .filter(x => x.abs != null)
+    .sort((a, b) => a.abs - b.abs);
+  if (commits.length < 2) {
+    return `\nSPENDING & PAYDOWN TRENDS\n  Only ${commits.length} month committed so far — need at least 2 commits to show trends. Encourage me to commit each month.\n`;
+  }
+  const fmtN = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const rows = commits.map(c => {
+    const d = c.r.detail, bk = d.costsByKind || {};
+    return `  - ${c.month}: total debt ${fmtN(c.r.debt)} | savings ${fmtN(c.r.savings)} | costs fixed ${fmtN(bk.fixed)}/var ${fmtN(bk.variable)}/sink ${fmtN(bk.sinking)}`;
+  }).join('\n');
+
+  // first vs latest deltas
+  const first = commits[0].r.detail, last = commits[commits.length - 1].r.detail;
+  const span = `${commits[0].month} → ${commits[commits.length - 1].month}`;
+  const deltas = [];
+  const dDebt = (parseFloat(commits[commits.length-1].r.debt)||0) - (parseFloat(commits[0].r.debt)||0);
+  const dSav  = (parseFloat(commits[commits.length-1].r.savings)||0) - (parseFloat(commits[0].r.savings)||0);
+  if (dDebt) deltas.push(`total debt ${dDebt < 0 ? 'down' : 'UP'} ${fmtN(Math.abs(dDebt))} PLN`);
+  if (dSav)  deltas.push(`savings ${dSav >= 0 ? 'up' : 'down'} ${fmtN(Math.abs(dSav))} PLN`);
+  // per-category spend change
+  const lastCost = name => (last.costs.find(c => c.name === name) || {}).amount || 0;
+  (first.costs || []).forEach(c => {
+    const now = lastCost(c.name), then = c.amount || 0;
+    if (Math.abs(now - then) >= 50) deltas.push(`${c.name} ${now > then ? 'up' : 'down'} ${fmtN(Math.abs(now - then))}`);
+  });
+
+  return `\nSPENDING & PAYDOWN TRENDS (from monthly commits, oldest → newest)\n${rows}\nChange over ${span}: ${deltas.length ? deltas.join('; ') : 'little movement yet'}.\n`;
+}
+
 // ─── Restore inputs & init ─────────────────────────────────────────────────
 function restoreInputs() {
   const fmtInp = v => v ? Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
@@ -2942,6 +3002,7 @@ ${['fixed','variable','sinking'].map(kind => {
     }).join('\n');
   }).filter(Boolean).join('\n') || '  none'}
 ${projectionSummary()}
+${trendSummary()}
 IMPORTANT CONTEXT
 - My free cash is OVERSTATED. The fixed costs above are incomplete — they only reflect what I've explicitly tracked.
 - I am a person in my late 20s living in Poland. Think about what a real person spends money on that I have NOT listed at all as a category. Common examples: clothing, haircuts/grooming, medical/pharmacy, dining out / bars, coffee, gifts, holidays/travel, car maintenance, home supplies, subscriptions I forgot to list, etc.
