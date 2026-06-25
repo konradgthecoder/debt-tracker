@@ -275,6 +275,16 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .rec-hint { font-size: 0.72rem; color: var(--dim); }
 .rec-use { color: var(--teal); cursor: pointer; text-decoration: underline; font-weight: 600; }
 .rec-use:hover { color: var(--green); }
+.opt-block { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.opt-title { font-size: 0.8rem; font-weight: 700; color: var(--text); margin-bottom: 0.3rem; }
+.opt-explain { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin-bottom: 0.6rem; }
+.opt-reco { font-size: 0.82rem; color: var(--text); margin-top: 0.6rem; }
+.cmp-table tr.opt-pay td { color: var(--text); }
+.cmp-table tr.opt-save td { color: var(--muted); }
+.cmp-table tr.opt-apy td { background: rgba(15,184,160,0.10); font-weight: 600; }
+.opt-tag { font-size: 0.68rem; font-weight: 700; }
+.opt-tag.pay { color: var(--green); }
+.opt-tag.save { color: var(--amber); }
 .snap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
 .snap-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: 0.9rem; }
 .snap-row .key { color: var(--muted); }
@@ -903,6 +913,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <div class="proj-panel" id="panel-compare">
         <div style="overflow-x:auto"><table class="cmp-table" id="cmp-table"></table></div>
         <span class="sim-marker">Same extra/mo applied three ways. Foreign debt converted to PLN at the live rate.</span>
+
+        <div class="opt-block">
+          <div class="opt-title">Where each PLN earns the most</div>
+          <p class="opt-explain" id="opt-explain"></p>
+          <div style="overflow-x:auto"><table class="cmp-table" id="opt-table"></table></div>
+          <p class="opt-reco" id="opt-reco"></p>
+        </div>
       </div>
 
       <!-- Chart -->
@@ -2006,7 +2023,7 @@ function renderSavings(runway, obligations, free) {
   const starterTgt = projState.starterAmount || 0;
   const fullTgt = obligations * (projState.efMonths || 0);
   const goal = projState.savingsGoal || 0;
-  const hiDebt = projDebts().some(d => d.rate >= HI_RATE && d.bal > 0.005);
+  const hiDebt = projDebts().some(d => d.rate >= hiCutoff() && d.bal > 0.005);
   const anyDebt = projDebts().some(d => d.bal > 0.005);
 
   // runway
@@ -2279,6 +2296,7 @@ function simOpts() {
     fullTarget,
     savingsGoal: goal,
     parallel: !!projState.parallel,
+    hiCutoff: hiCutoff(),
   };
 }
 
@@ -2378,9 +2396,10 @@ function projDebts() {
   }).filter(d => d.bal > 0);
 }
 
-// debts at/above this rate are "high interest" — paying them beats a realistic savings yield,
-// so the waterfall attacks them before topping up the full emergency fund or investing.
-const HI_RATE = 8;
+// The opportunity-cost cutoff: paying a debt is a guaranteed return equal to its rate,
+// so a debt only beats saving/investing when its rate exceeds your savings APY. That APY
+// is therefore the line between "attack this debt first" and "money is better saved".
+function hiCutoff() { return projState.apy || 0; }
 
 function orderDebts(debts, strategy) {
   const arr = debts.map((d, i) => ({ ...d, _i: i }));
@@ -2408,16 +2427,17 @@ function simulate(debts, extra, strategy, opts) {
   const fullTgt    = opts ? (opts.fullTarget || 0)    : 0;
   const goal       = opts ? (opts.savingsGoal || 0)   : 0;
   const parallel   = opts ? !!opts.parallel           : false;
+  const hiRate     = opts ? (opts.hiCutoff ?? 0)       : 0; // debts above this beat saving
   let fundFullMonth = (opts && fullTgt > 0 && savings >= fullTgt - 0.005) ? 0 : null;
   const savingsSeries = [savings];
 
-  // pay `amt` across active debts in strategy order; hiOnly restricts to high-interest. returns leftover.
+  // pay `amt` across active debts in strategy order; hiOnly restricts to rates above the cutoff. returns leftover.
   const payDebt = (amt, hiOnly) => {
     let d = amt;
     for (const debt of state) {
       if (d <= 0) break;
       if (debt.bal <= 0.005) continue;
-      if (hiOnly && debt.rate < HI_RATE) continue;
+      if (hiOnly && debt.rate < hiRate) continue;
       const p = Math.min(debt.bal, d); debt.bal -= p; d -= p;
     }
     return d;
@@ -2443,7 +2463,7 @@ function simulate(debts, extra, strategy, opts) {
       if (savings < starterTgt - 0.005) { const a = Math.min(d, starterTgt - savings); savings += a; d -= a; }
       // 5p. savings goal in parallel (only if toggle on)
       if (parallel && goal > 0 && d > 0) { const a = Math.min(d, goal); savings += a; d -= a; }
-      // 3. high-interest debt (rate ≥ HI_RATE)
+      // 3. high-interest debt (rate ≥ savings APY — beats saving)
       d = payDebt(d, true);
       // 4. full emergency fund
       if (savings < fullTgt - 0.005 && d > 0) { const a = Math.min(d, fullTgt - savings); savings += a; d -= a; }
@@ -2573,6 +2593,7 @@ function renderProjection() {
   }
 
   renderComparison(debts, projState.extra, opts);
+  renderOptRanking(debts);
   renderPlanStrip();
   drawChart(sim);
 }
@@ -2641,6 +2662,51 @@ function renderComparison(debts, extra, opts) {
         <td>${fmt(r.totalInterest)}</td>
       </tr>`).join('')}</tbody>`;
   document.getElementById('cmp-table').innerHTML = html;
+}
+
+// Optimal allocation: rank every use of a PLN by its guaranteed return (debt rate or savings APY).
+function renderOptRanking(debts) {
+  const explainEl = document.getElementById('opt-explain');
+  const tableEl = document.getElementById('opt-table');
+  const recoEl = document.getElementById('opt-reco');
+  if (!tableEl) return;
+
+  const apy = projState.apy || 0;
+  const active = debts.filter(d => d.bal > 0.005);
+  if (!active.length) {
+    explainEl.textContent = 'Add debts to see where your money earns the most.';
+    tableEl.innerHTML = ''; recoEl.textContent = '';
+    return;
+  }
+
+  explainEl.innerHTML = `Paying a debt is a <strong>guaranteed return equal to its interest rate</strong>; saving earns your <strong>${apy}% APY</strong>. So every spare PLN is worth most wherever the rate is highest — clear debts priced above your APY first, and once only cheaper debt remains, saving/investing wins. "Return / yr per 1,000 PLN" is just the rate × 10.`;
+
+  const rows = active.map(d => ({ name: d.name, rate: d.rate, kind: 'debt' }));
+  rows.push({ name: 'Savings / investments', rate: apy, kind: 'savings' });
+  rows.sort((a, b) => b.rate - a.rate || (a.kind === 'savings' ? 1 : -1));
+
+  const body = rows.map(r => {
+    const per1000 = Math.round(r.rate * 10);
+    let cls, verdict;
+    if (r.kind === 'savings') { cls = 'opt-apy'; verdict = '— the bar to beat —'; }
+    else if (r.rate >= apy)   { cls = 'opt-pay'; verdict = '<span class="opt-tag pay">PAY DOWN</span> beats saving'; }
+    else                      { cls = 'opt-save'; verdict = '<span class="opt-tag save">SAVE INSTEAD</span> earns more'; }
+    return `<tr class="${cls}">
+      <td>${esc(r.name)}</td>
+      <td>${r.rate.toFixed(2)}%</td>
+      <td>${fmt(per1000)}</td>
+      <td>${verdict}</td>
+    </tr>`;
+  }).join('');
+  tableEl.innerHTML = `<thead><tr><th>Where each PLN goes</th><th>Rate</th><th>Return /yr per 1,000</th><th></th></tr></thead><tbody>${body}</tbody>`;
+
+  // marginal recommendation = the single highest-rate use
+  const top = rows[0];
+  if (top.kind === 'savings') {
+    recoEl.innerHTML = `<strong>Your next spare PLN → savings.</strong> Every remaining debt is priced below your ${apy}% APY, so saving/investing now earns more than overpaying them. (Keep paying all debt minimums.)`;
+  } else {
+    recoEl.innerHTML = `<strong>Your next spare PLN → ${esc(top.name)} (${top.rate.toFixed(2)}%).</strong> It returns ~${fmt(Math.round(top.rate * 10))}/yr per 1,000 PLN — about ${(top.rate / Math.max(apy, 0.01)).toFixed(1)}× what the same money earns in savings at ${apy}%.`;
+  }
 }
 
 // ─── Chart (canvas) ─────────────────────────────────────────────────────────
@@ -2887,7 +2953,7 @@ function projectionSummary() {
   const sim = simulate(debts, projState.extra || 0, projState.strategy, opts);
   const order = orderDebts(debts, projState.strategy).map(d => d.name).join(' → ');
   const savingsLine = opts
-    ? `- Savings waterfall (evidence-based, debt-first): small starter buffer ${fmt(starterTarget())} → high-interest debt (≥${HI_RATE}%) → full emergency fund ${fmt(efTarget())} (${projState.efMonths}mo) → savings goal ${fmt(projState.savingsGoal || 0)}/mo${projState.parallel ? ' (funded IN PARALLEL with debt)' : ' (after EF is full)'} → extra on low-rate debt. The starter buffer is intentionally small (~1 month essentials) so it doesn't delay high-interest payoff. Current savings ${fmt(parseFloat(S.savings) || 0)}; emergency fund full ${sim.fundFullMonth === 0 ? 'already' : sim.fundFullMonth != null ? monthsToDate(sim.fundFullMonth) : 'not within horizon'}.`
+    ? `- Savings waterfall (optimized, debt-first): small starter buffer ${fmt(starterTarget())} → debt above the savings APY (≥${hiCutoff()}%, the opportunity-cost cutoff) → full emergency fund ${fmt(efTarget())} (${projState.efMonths}mo) → savings goal ${fmt(projState.savingsGoal || 0)}/mo${projState.parallel ? ' (funded IN PARALLEL with debt)' : ' (after EF is full)'} → debt below the APY. Rationale: paying a debt is a guaranteed return equal to its rate, so only debts above the ${hiCutoff()}% APY beat saving. The starter buffer stays small so it doesn't delay payoff. Current savings ${fmt(parseFloat(S.savings) || 0)}; emergency fund full ${sim.fundFullMonth === 0 ? 'already' : sim.fundFullMonth != null ? monthsToDate(sim.fundFullMonth) : 'not within horizon'}.`
     : `- Savings waterfall: no targets set yet.`;
   return `\nPAYOFF PROJECTION (computed by the tracker engine — reason about THESE numbers, do not re-derive)
 - Strategy: ${projState.strategy} (payoff order: ${order})
