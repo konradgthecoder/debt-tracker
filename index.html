@@ -599,7 +599,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 </style>
 
 <!-- Toast -->
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- Data backup/restore modal -->
 <div class="modal-overlay" id="data-modal" onclick="if(event.target===this)closeDataModal()">
@@ -762,7 +762,7 @@ html, body { max-width: 100%; overflow-x: clip; }
       <div class="section-line"></div>
     </div>
     <p style="font-size:0.78rem;color:var(--muted);margin:-0.3rem 0 0.6rem;">
-      <strong>Fixed</strong> = predictable bills · <strong>Variable</strong> = a monthly allowance you cap yourself at · <strong>Sinking funds</strong> = irregular costs (travel, car, gifts) entered as a yearly figure and set aside monthly so the cash is there when the bill lands. All total as a monthly figure into your free cash.
+      <strong>Fixed</strong> = predictable bills · <strong>Variable</strong> = a monthly allowance you cap yourself at · <strong>Sinking funds</strong> = irregular costs (travel, car, gifts) entered as a yearly figure and set aside monthly so the cash is there when the bill lands. All total as a monthly figure into your free cash. <span style="color:var(--dim)">Tip: any amount field accepts math, e.g. <code>125+10+30</code>.</span>
     </p>
     <div class="table-wrap">
       <table style="table-layout:fixed;min-width:460px">
@@ -824,7 +824,7 @@ html, body { max-width: 100%; overflow-x: clip; }
           <div id="s-overbudget" class="rec-hint" style="color:var(--coral);display:none;margin-top:0.4rem">⚠ Over budget</div>
         </div>
         <div class="alloc-wrap" id="alloc-wrap" style="display:none">
-          <canvas id="alloc-donut" width="150" height="150"></canvas>
+          <canvas id="alloc-donut" width="150" height="150" role="img" aria-label="Donut chart of where your monthly income goes, by debt type and living costs"></canvas>
           <div class="alloc-legend" id="alloc-legend"></div>
         </div>
         <div class="alloc-insights" id="alloc-insights" style="display:none"></div>
@@ -996,9 +996,9 @@ html, body { max-width: 100%; overflow-x: clip; }
             <span><span class="dot" style="background:var(--muted)"></span>Locked plan</span>
             <span><span class="dot" style="background:var(--amber)"></span>Your snapshots</span>
           </div>
-          <button class="proj-zoom-btn" id="proj-zoom" onclick="toggleZoom()">Zoom: consumer window</button>
+          <button class="proj-zoom-btn" id="proj-zoom" onclick="toggleZoom()" title="Consumer window: zoom to when your non-mortgage debt is cleared (+6 months). Full horizon: the whole timeline including the mortgage.">Zoom: consumer window</button>
         </div>
-        <canvas id="proj-canvas"></canvas>
+        <canvas id="proj-canvas" role="img" aria-label="Projection chart of your debt balance and savings over time"></canvas>
       </div>
 
       <!-- Savings growth -->
@@ -1027,7 +1027,7 @@ html, body { max-width: 100%; overflow-x: clip; }
           </div>
           <span class="sim-marker" style="margin:0">gap = real gain above inflation</span>
         </div>
-        <canvas id="sav-canvas"></canvas>
+        <canvas id="sav-canvas" role="img" aria-label="Chart of your savings growth in today's money versus what you contribute"></canvas>
         <span class="sim-marker" id="sav-note"></span>
       </div>
     </div>
@@ -2096,6 +2096,8 @@ function toggleSection(key) {
   if (!sec) return;
   const collapsed = !sec.classList.contains('collapsed');
   sec.classList.toggle('collapsed', collapsed);
+  const toggleBtn = sec.querySelector('.sec-toggle');
+  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', String(!collapsed));
   const st = loadSecState(); st[key] = collapsed; saveSecState(st);
 }
 function initSections() {
@@ -2108,6 +2110,7 @@ function initSections() {
       const btn = document.createElement('button');
       btn.className = 'sec-toggle'; btn.type = 'button';
       btn.setAttribute('aria-label', 'Collapse / expand section');
+      btn.setAttribute('aria-expanded', String(!st[key]));
       btn.onclick = () => toggleSection(key);
       const chev = document.createElement('span');
       chev.className = 'sec-chevron'; chev.textContent = '▾';
@@ -2152,7 +2155,7 @@ function renderSavings(runway, obligations, free) {
   if (goalRec) {
     if (recG <= 0) goalRec.textContent = '';
     else if (Math.abs(goal - recG) < 1) goalRec.innerHTML = '✓ ~20% of income';
-    else goalRec.innerHTML = `Recommended ${fmt0(recG)} (20% of income) <span class="rec-use" onclick="useRecommended('goal')">use</span>`;
+    else goalRec.innerHTML = `Recommended ${fmt0(recG)} (20% of income, rounded) <span class="rec-use" onclick="useRecommended('goal')">use</span>`;
   }
 
   // "you're here" — current waterfall tier
@@ -2894,6 +2897,21 @@ function drawChart(sim) {
     if (endLabel) { ctx.fillStyle = cLabel; ctx.fillText(endLabel, cssW - padR - 54, cssH - 8); }
   };
 
+  // interior x-axis date ticks at the quarter points, so the timeline isn't just "now → end"
+  const drawXTicks = (xOfMonth, maxMo) => {
+    if (!(maxMo > 3)) return;
+    ctx.font = '10px -apple-system, sans-serif';
+    for (let k = 1; k <= 3; k++) {
+      const mo = Math.round(maxMo * k / 4);
+      if (mo <= 0 || mo >= maxMo) continue;
+      const x = xOfMonth(mo);
+      ctx.strokeStyle = cGrid; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = cLabel; ctx.fillText(monthsToDate(mo), x - 18, cssH - 8);
+    }
+  };
+
   // ─── Plan-anchored view: x-axis is months since plan was locked ───
   if (planState && planState.series?.length) {
     const elapsed = Math.max(0, monthAbsNow() - planState.startAbs);
@@ -2918,6 +2936,7 @@ function drawChart(sim) {
       ...(savProj || []), ...savSnaps.map(s => s.sav), 1);
     const yAt = v => padT + plotH - (v / maxBal) * plotH;
     drawGrid(maxBal, monthsToDate(cutoff));
+    drawXTicks(mo => xAt(mo), cutoff);
 
     // "now" divider
     const nowX = xAt(elapsed);
@@ -2965,6 +2984,7 @@ function drawChart(sim) {
   const xAt = i => padL + (i / totalX) * plotW;
   const yAt = v => padT + plotH - (v / maxBal) * plotH;
   drawGrid(maxBal, monthsToDate(cutoff));
+  drawXTicks(mo => xAt(past.length + mo), cutoff);
 
   const nowX = xAt(past.length);
   ctx.strokeStyle = cDiv; ctx.setLineDash([3, 3]);
