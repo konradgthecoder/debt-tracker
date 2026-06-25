@@ -354,6 +354,11 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .chat-meta { display: flex; justify-content: space-between; align-items: center; }
 .chat-counter { font-size: 0.7rem; color: var(--dim); }
 .cad-pln { color: var(--muted); font-size: 0.78rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.kind-select {
+  flex: 0 0 auto; background: var(--card2); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--muted); font-family: inherit; font-size: 0.7rem; padding: 0.15rem 0.25rem; cursor: pointer; outline: none;
+}
+.kind-select:hover, .kind-select:focus { border-color: var(--teal); color: var(--text); }
 
 /* ─── Projection ─── */
 .proj-wrap {
@@ -639,25 +644,28 @@ html, body { max-width: 100%; overflow-x: hidden; }
     </div>
   </section>
 
-  <!-- FIXED COSTS -->
+  <!-- MONTHLY COSTS -->
   <section>
     <div class="section-head">
-      <span class="section-title">Fixed costs</span>
+      <span class="section-title">Monthly costs</span>
       <div class="section-line"></div>
     </div>
+    <p style="font-size:0.78rem;color:var(--muted);margin:-0.3rem 0 0.6rem;">
+      <strong>Fixed</strong> = predictable bills · <strong>Variable</strong> = a monthly allowance you cap yourself at · <strong>Sinking funds</strong> = irregular costs (travel, car, gifts) entered as a yearly figure and set aside monthly so the cash is there when the bill lands. All total as a monthly figure into your free cash.
+    </p>
     <div class="table-wrap">
-      <table style="table-layout:fixed;min-width:440px">
+      <table style="table-layout:fixed;min-width:460px">
         <colgroup>
           <col style="width:24px">
           <col>
-          <col style="width:160px">
+          <col style="width:170px">
           <col style="width:38px">
         </colgroup>
         <thead>
           <tr>
             <th></th>
             <th>Category</th>
-            <th class="num">Monthly (PLN)</th>
+            <th class="num">Amount</th>
             <th></th>
           </tr>
         </thead>
@@ -665,14 +673,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
         <tfoot>
           <tr class="total-row">
             <td></td>
-            <td>Total fixed costs</td>
+            <td>Total monthly costs</td>
             <td class="num" id="total-costs">—</td>
             <td></td>
           </tr>
         </tfoot>
       </table>
     </div>
-    <button class="add-row-btn" onclick="addCostRow()">+ add category</button>
   </section>
 
   <!-- SNAPSHOT -->
@@ -695,7 +702,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
             <span class="amt" id="s-debt-payments" style="color:var(--muted)">—</span>
           </div>
           <div class="snap-row">
-            <span class="key">Fixed costs (auto)</span>
+            <span class="key">Monthly costs (auto)</span>
             <span class="amt" id="s-fixed-costs" style="color:var(--muted)">—</span>
           </div>
           <div class="snap-divider"></div>
@@ -986,18 +993,34 @@ const DEFAULT_DEBTS = [
   { name:'Renovation',  type:'zero',     balance:'',   original:'',   rate:0,  min:'' },
 ];
 const DEFAULT_COSTS = [
-  { name:'Groceries & food',   amount: 2100 },
-  { name:'Utilities (water, heating)', amount: '' },
-  { name:'Electricity',        amount: '' },
-  { name:'Internet',           amount: '' },
-  { name:'Phone',              amount: '' },
-  { name:'Car insurance',      amount: '' },
-  { name:'Health insurance',   amount: '' },
-  { name:'Fuel / transport',   amount: '' },
-  { name:'Subscriptions',      amount: '' },
-  { name:'Gym / sport',        amount: '' },
-  { name:'Eating out',         amount: '' },
+  // fixed — predictable monthly bills
+  { name:'Utilities (water, heating)', amount: '', kind:'fixed' },
+  { name:'Electricity',        amount: '', kind:'fixed' },
+  { name:'Internet',           amount: '', kind:'fixed' },
+  { name:'Phone',              amount: '', kind:'fixed' },
+  { name:'Health insurance',   amount: '', kind:'fixed' },
+  { name:'Subscriptions',      amount: '', kind:'fixed' },
+  // variable — fluctuates, set a monthly allowance
+  { name:'Groceries & food',   amount: 2100, kind:'variable' },
+  { name:'Fuel / transport',   amount: '', kind:'variable' },
+  { name:'Eating out & bars',  amount: '', kind:'variable' },
+  { name:'Coffee',             amount: '', kind:'variable' },
+  { name:'Gym / sport',        amount: '', kind:'variable' },
+  // sinking funds — irregular, enter yearly (stored as monthly set-aside)
+  { name:'Travel / holidays',  amount: '', kind:'sinking' },
+  { name:'Car maintenance',    amount: '', kind:'sinking' },
+  { name:'Gifts & occasions',  amount: '', kind:'sinking' },
+  { name:'Clothing & shoes',   amount: '', kind:'sinking' },
+  { name:'Medical / pharmacy', amount: '', kind:'sinking' },
 ];
+
+// guess a category's group from its name (used to migrate older data without a kind)
+function classifyCost(name) {
+  const n = (name || '').toLowerCase();
+  if (/grocer|food|fuel|transport|petrol|\beating\b|dining|restaurant|takeaway|\bbars?\b|coffee|gym|sport|entertain|leisure/.test(n)) return 'variable';
+  if (/travel|holiday|vacation|mainten|repair|tyre|tire|gift|medical|pharmac|cloth|dental|vet/.test(n)) return 'sinking';
+  return 'fixed';
+}
 
 function freshState() {
   return {
@@ -1020,6 +1043,8 @@ function loadState() {
       s.costs = JSON.parse(JSON.stringify(DEFAULT_COSTS));
       if (s.groceries) s.costs[0].amount = s.groceries;
     }
+    // migrate: give every cost a group (fixed/variable/sinking)
+    if (s.costs) s.costs.forEach(c => { if (!c.kind) c.kind = classifyCost(c.name); });
     return { ...freshState(), ...s };
   } catch { return freshState(); }
 }
@@ -1083,6 +1108,7 @@ function applyImport(raw) {
   const parsed = JSON.parse(raw);
   if (!parsed.debts) throw new Error('missing debts — is this a tracker export?');
   parsed.debts.forEach(d => { if (d.original == null) d.original = d.balance || ''; });
+  if (parsed.costs) parsed.costs.forEach(c => { if (!c.kind) c.kind = classifyCost(c.name); });
   S = { ...freshState(), ...parsed };
   persist();
   renderAll();
@@ -1613,32 +1639,87 @@ function delDebt(i) {
   persist(); renderDebtTable(); recalc();
 }
 
-// ─── Fixed costs ───────────────────────────────────────────────────────────
+// ─── Monthly costs (fixed / variable / sinking funds) ───────────────────────
+const COST_GROUPS = [
+  { key:'fixed',    label:'Fixed',                hint:'predictable monthly bills' },
+  { key:'variable', label:'Variable / lifestyle', hint:'fluctuates — set a monthly allowance' },
+  { key:'sinking',  label:'Sinking funds',        hint:'irregular — enter yearly, saved monthly' },
+];
+// every cost stores `amount` as the MONTHLY figure (sinking = yearly ÷ 12)
+function costMonthly(c) { return parseFloat(c.amount) || 0; }
+
+function kindSelect(i, kind) {
+  return `<select class="kind-select" onchange="updateCost(${i},'kind',this.value)">`
+    + COST_GROUPS.map(g => `<option value="${g.key}"${g.key === kind ? ' selected' : ''}>${g.label.split(' ')[0]}</option>`).join('')
+    + `</select>`;
+}
+
 function renderCosts() {
   const tbody = document.getElementById('costs-body');
   tbody.innerHTML = '';
-  (S.costs || []).forEach((c, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="drag-handle">⠿</td>
-      <td>${inp('left', c.name, 'Category', `updateCost(${i},'name',this.value)`)}</td>
-      <td class="num">${numInp(c.amount, '0', `updateCost(${i},'amount',this.value)`)}</td>
-      <td><button class="del-btn" onclick="delCost(${i})">✕</button></td>
-    `;
-    setupCostDrag(tr, i);
-    tbody.appendChild(tr);
+  COST_GROUPS.forEach(g => {
+    const items = (S.costs || []).map((c, i) => ({ c, i })).filter(x => (x.c.kind || 'fixed') === g.key);
+    const sub = items.reduce((s, x) => s + costMonthly(x.c), 0);
+
+    const htr = document.createElement('tr');
+    htr.className = 'group-header';
+    htr.innerHTML = `
+      <td></td>
+      <td><div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+        <span style="font-weight:700">${g.label}</span>
+        <span style="color:var(--dim);font-size:0.72rem">${g.hint}</span></div></td>
+      <td class="num" style="font-weight:700">${sub > 0 ? fmt(sub) + '/mo' : '—'}</td>
+      <td></td>`;
+    tbody.appendChild(htr);
+
+    items.forEach(({ c, i }) => {
+      const tr = document.createElement('tr');
+      tr.className = 'group-child'; tr.dataset.group = g.key;
+      let amtCell;
+      if (g.key === 'sinking') {
+        const mo = costMonthly(c);
+        const yearly = mo ? mo * 12 : '';
+        amtCell = `${numInp(yearly, '/yr', `updateCost(${i},'yearly',this.value)`)}<div class="cad-pln">≈ ${fmt(mo)}/mo</div>`;
+      } else {
+        amtCell = numInp(c.amount, '0', `updateCost(${i},'amount',this.value)`);
+      }
+      tr.innerHTML = `
+        <td class="drag-handle">⠿</td>
+        <td style="padding-left:0.5rem">
+          <div style="display:flex;gap:0.4rem;align-items:center">
+            ${inp('left', c.name, 'Category', `updateCost(${i},'name',this.value)`)}
+            ${kindSelect(i, g.key)}
+          </div>
+        </td>
+        <td class="num">${amtCell}</td>
+        <td><button class="del-btn" onclick="delCost(${i})">✕</button></td>`;
+      setupCostDrag(tr, i);
+      tbody.appendChild(tr);
+    });
+
+    const atr = document.createElement('tr');
+    atr.className = 'group-child'; atr.dataset.group = g.key;
+    atr.innerHTML = `<td></td><td colspan="3" style="padding:0">
+      <button class="add-row-btn" style="margin:0;padding:0.3rem" onclick="addCostRow('${g.key}')">+ add ${g.label.split(' ')[0].toLowerCase()} cost</button></td>`;
+    tbody.appendChild(atr);
   });
 }
+
 function updateCost(i, field, val) {
-  S.costs[i][field] = field === 'name' ? val : parseNum(val);
-  persist(); recalc();
+  if (field === 'name' || field === 'kind') S.costs[i][field] = val;
+  else if (field === 'yearly') S.costs[i].amount = (parseNum(val) || 0) / 12; // sinking: store monthly
+  else S.costs[i].amount = parseNum(val);
+  persist();
+  if (field === 'kind') renderCosts();  // regroup
+  recalc();
 }
-function addCostRow() {
+function addCostRow(kind = 'fixed') {
   if (!S.costs) S.costs = [];
-  S.costs.push({ name:'', amount:'' });
+  S.costs.push({ name:'', amount:'', kind });
   persist(); renderCosts(); recalc();
-  const rows = document.querySelectorAll('#costs-body tr');
-  rows[rows.length-1]?.querySelector('input')?.focus();
+  // focus the new row's name input (last child row of its group)
+  const rows = [...document.querySelectorAll(`#costs-body tr.group-child[data-group="${kind}"] input.left`)];
+  rows[rows.length - 1]?.focus();
 }
 function delCost(i) {
   S.costs.splice(i, 1);
@@ -1829,7 +1910,7 @@ function renderAllocation() {
     { label: '0% instalments', value: catMin.zero,     color: '#5B8DEF' },
     { label: 'Mortgage',       value: catMin.mortgage, color: '#F59E0B' },
     { label: 'Foreign debt',   value: catMin.foreign,  color: '#A882FF' },
-    { label: 'Fixed costs',    value: costs,           color: '#00B8D4' },
+    { label: 'Living costs',   value: costs,           color: '#00B8D4' },
   ];
   if (free != null) segs.push({ label: 'Free cash', value: free, color: '#22C99A' });
 
@@ -1872,8 +1953,8 @@ function renderAllocation() {
     const ratios = [
       { name: 'Debt-to-income', val: debtPay / income, bench: 0.36, color: '#F4566A',
         note: 'Lenders flag above 36%. Your monthly debt payments vs income.' },
-      { name: 'Fixed costs',    val: costs / income,    bench: 0.50, color: '#00B8D4',
-        note: 'Essentials as a share of income. Lower leaves more to deploy.' },
+      { name: 'Living costs',   val: costs / income,    bench: 0.50, color: '#00B8D4',
+        note: 'All monthly costs as a share of income. Lower leaves more to deploy.' },
       { name: 'Free-cash rate', val: (free || 0) / income, bench: 0.20, color: '#22C99A',
         note: 'What’s left to save or overpay. Aim for 20%+.' },
     ];
@@ -2805,11 +2886,16 @@ ${debtLines(groups.mortgage, false) || '  none'}
 Foreign debt (CAD, rate: ${cadRate ? cadRate.toFixed(4) + ' PLN/CAD' : 'unknown'}):
 ${debtLines(groups.foreign, true) || '  none'}
 
-FIXED MONTHLY COSTS (⚠ = not filled in yet, likely a real expense)
-${(S.costs || []).map(c => {
-    const amt = parseFloat(c.amount);
-    return amt > 0 ? `  - ${c.name}: ${fmtN(amt)} PLN` : `  - ${c.name}: ⚠ not filled in`;
-  }).join('\n') || '  none'}
+MONTHLY COSTS (⚠ = not filled in yet, likely a real expense; sinking funds are irregular costs saved monthly)
+${['fixed','variable','sinking'].map(kind => {
+    const label = { fixed: 'Fixed', variable: 'Variable / lifestyle', sinking: 'Sinking funds (monthly set-aside for irregular costs)' }[kind];
+    const rows = (S.costs || []).filter(c => (c.kind || 'fixed') === kind);
+    if (!rows.length) return '';
+    return `  ${label}:\n` + rows.map(c => {
+      const amt = parseFloat(c.amount);
+      return amt > 0 ? `    - ${c.name}: ${fmtN(amt)} PLN/mo` : `    - ${c.name}: ⚠ not filled in`;
+    }).join('\n');
+  }).filter(Boolean).join('\n') || '  none'}
 ${projectionSummary()}
 IMPORTANT CONTEXT
 - My free cash is OVERSTATED. The fixed costs above are incomplete — they only reflect what I've explicitly tracked.
