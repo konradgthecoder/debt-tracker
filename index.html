@@ -96,6 +96,20 @@ body {
 .val.danger { color: var(--coral); }
 .val.neutral{ color: var(--text); }
 
+/* ─── Onboarding banner ─── */
+.onboard {
+  position: relative; background: var(--card); border: 1px solid rgba(15,184,160,0.35);
+  border-left: 3px solid var(--teal); border-radius: 10px; padding: 1.1rem 1.3rem;
+}
+.onboard-title { font-size: 0.95rem; font-weight: 700; color: var(--text); margin-bottom: 0.5rem; }
+.onboard-steps { margin: 0 0 0.8rem; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); line-height: 1.45; }
+.onboard-steps strong { color: var(--text); font-weight: 600; }
+.onboard-link { color: var(--teal); cursor: pointer; font-weight: 600; white-space: nowrap; }
+.onboard-link:hover { color: var(--green); }
+.onboard-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.onboard-x { position: absolute; top: 0.5rem; right: 0.7rem; background: none; border: none; color: var(--dim); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0; }
+.onboard-x:hover { color: var(--text); }
+
 /* ─── Toast ─── */
 .toast {
   position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(4px);
@@ -504,10 +518,18 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   .sim-stats { grid-template-columns: 1fr 1fr; }
   .proj-milestones { grid-template-columns: 1fr; }
   .snap-grid { grid-template-columns: 1fr; }
-  .ribbon-stats { gap: 1rem 1.25rem; width: 100%; }
   .ribbon { flex-direction: column; align-items: stretch; gap: 0.75rem; padding: 0.7rem 1rem; }
-  .ribbon-left { justify-content: space-between; width: 100%; }
-  .ribbon-stat .val { font-size: 1.05rem; }
+  .ribbon-left { justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 0.5rem 0.6rem; }
+  .ribbon-title { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .ribbon-actions { flex-shrink: 0; flex-wrap: wrap; }
+  /* 3-up grid; each cell clips its own content so a long value can never push the page wider */
+  .ribbon-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; width: 100%; }
+  .ribbon-stat { align-items: flex-start; min-width: 0; }
+  .ribbon-stat .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .ribbon-stat .val { font-size: 0.92rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  /* let the CAD rate controls wrap instead of running off the right edge */
+  .rate-bar { flex-wrap: wrap; gap: 0.4rem 0.6rem; }
+  #rate-manual { width: 72px !important; }
   main { padding: 1rem 0.9rem 4rem calc(0.9rem + env(safe-area-inset-left)); gap: 1.4rem; }
   body { font-size: 14px; }
   .alloc-wrap { gap: 0.7rem; }
@@ -655,6 +677,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
 </div>
 
 <main>
+
+  <!-- ONBOARDING (first run / empty state) -->
+  <div id="onboard" class="onboard" style="display:none">
+    <button class="onboard-x" onclick="dismissOnboard()" title="Dismiss" aria-label="Dismiss">×</button>
+    <div class="onboard-title">Welcome — let's set up your tracker</div>
+    <ol class="onboard-steps">
+      <li><strong>Enter your monthly net income</strong> — it drives free cash, the simulator and every ratio. <span class="onboard-link" onclick="focusIncome()">Jump to it →</span></li>
+      <li><strong>List your debts &amp; monthly costs</strong> — edit the rows below, or clear the samples and add your own.</li>
+      <li><strong>See your payoff &amp; savings plan</strong> — the projection and AI insights update live.</li>
+    </ol>
+    <div class="onboard-actions">
+      <button class="btn btn-primary" onclick="loadSampleData()">Load sample data</button>
+      <button class="btn btn-ghost" onclick="dismissOnboard()">Dismiss</button>
+    </div>
+  </div>
 
   <!-- DEBTS -->
   <section data-sec="debts">
@@ -924,6 +961,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <!-- Comparison -->
       <div class="proj-panel" id="panel-compare">
         <div style="overflow-x:auto"><table class="cmp-table" id="cmp-table"></table></div>
+        <p class="opt-explain" id="cmp-note" style="margin-top:0.2rem"></p>
         <span class="sim-marker">Same extra/mo applied three ways. Foreign debt converted to PLN at the live rate.</span>
 
         <div class="opt-block">
@@ -951,14 +989,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <!-- Savings growth -->
       <div class="proj-panel" id="panel-savings">
         <div class="sim-row">
-          <label class="insights-label">Assumed APY</label>
+          <label class="insights-label">Deposit /mo</label>
+          <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-monthly" style="width:84px" onchange="onSavMonthly(this.value)">
+          <span class="insights-label">PLN</span>
+          <label class="insights-label" style="margin-left:0.6rem">Assumed APY</label>
           <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-apy" value="5" style="width:64px" onchange="onApy(this.value)">
           <span class="insights-label">%</span>
           <label class="insights-label" style="margin-left:0.6rem">Inflation</label>
           <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-infl" value="3.5" style="width:64px" onchange="onInflation(this.value)">
           <span class="insights-label">%</span>
         </div>
-        <span class="sim-marker">APY compounded monthly (~4% cash, ~7% diversified). “Today’s money” discounts the balance by inflation so you see real buying power.</span>
+        <span class="sim-marker" id="sav-deposit-note">APY compounded monthly (~4% cash, ~7% diversified). “Today’s money” discounts the balance by inflation so you see real buying power.</span>
         <div class="sim-stats" style="grid-template-columns:repeat(3,1fr)">
           <div class="sim-stat"><div class="ss-label">In 5 years (today's money)</div><div class="ss-val" id="sav-5y">—</div><div class="ss-sub" id="sav-5y-real"></div></div>
           <div class="sim-stat"><div class="ss-label">In 10 years (today's money)</div><div class="ss-val" id="sav-10y">—</div><div class="ss-sub" id="sav-10y-real"></div></div>
@@ -1220,6 +1261,32 @@ function applyImport(raw) {
   S = normalizeState(parsed);
   persist();
   renderAll();
+}
+
+// ─── Onboarding / empty-state ──────────────────────────────────────────────
+const ONBOARD_KEY = 'debt_tracker_onboarded';
+function renderOnboard() {
+  const el = document.getElementById('onboard');
+  if (!el) return;
+  const dismissed = localStorage.getItem(ONBOARD_KEY) === '1';
+  const hasIncome = (parseFloat(S.income) || 0) > 0;
+  el.style.display = (!dismissed && !hasIncome) ? 'block' : 'none';
+}
+function dismissOnboard() { localStorage.setItem(ONBOARD_KEY, '1'); renderOnboard(); }
+function focusIncome() {
+  const inp = document.getElementById('s-income');
+  if (!inp) return;
+  inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => inp.focus(), 350);
+}
+async function loadSampleData() {
+  try {
+    const r = await fetch('data/import.sample.json?t=' + Date.now());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    applyImport(await r.text());
+    localStorage.setItem(ONBOARD_KEY, '1');
+    toast('Sample data loaded — explore, then enter your own', 'ok');
+  } catch (e) { toast('Could not load sample data: ' + e.message, 'err'); }
 }
 
 function importFromText() {
@@ -1995,6 +2062,7 @@ function recalc() {
   renderProjection();
   renderAllocation();
   drawSavingsGrowth();   // keep the Savings-growth tab live (goal/APY/inflation/savings changes)
+  renderOnboard();       // hide the welcome banner as soon as income is entered
 }
 
 // ─── Collapsible sections (per-device UI pref, not synced) ──────────────────
@@ -2290,7 +2358,7 @@ function allocCanvasMove(e) {
 
 // ─── Payoff projection engine ──────────────────────────────────────────────
 const PROJ_STORAGE = 'debt_tracker_proj';
-let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, starterAmount: 4000, savingsGoal: 0, parallel: false, apy: 5, inflation: 3.5 };
+let projState = { extra: null, strategy: 'avalanche', zoom: 'consumer', tab: 'simulator', efMonths: 6, starterAmount: 4000, savingsGoal: 0, parallel: false, apy: 5, inflation: 3.5, savMonthly: null };
 
 // ─── Peer spending benchmarks (baked benchmarks.json, refreshed via GitHub Action) ──
 const BENCHMARK_REPO = 'konradgthecoder/debt-tracker';
@@ -2686,17 +2754,26 @@ function renderComparison(debts, extra, opts) {
     const r = simulate(debts, extra, s.key, opts);
     return { ...s, ...r };
   });
-  const bestFull = Math.min(...rows.filter(r => r.fullyMonth != null).map(r => r.fullyMonth));
+  // Rank on the actual optimization target — total interest paid — with the
+  // fully-debt-free date as the tiebreaker. (Ranking on fully-free month alone
+  // rewards ordering artifacts: with the same monthly budget every strategy
+  // finishes within a month or two of the others.)
+  const best = rows.reduce((a, b) =>
+    (b.totalInterest < a.totalInterest - 0.5 ||
+      (Math.abs(b.totalInterest - a.totalInterest) <= 0.5 && (b.fullyMonth ?? Infinity) < (a.fullyMonth ?? Infinity)))
+      ? b : a);
   const html = `
     <thead><tr><th>Strategy</th><th>Consumer-free</th><th>Fully free</th><th>Total interest</th></tr></thead>
     <tbody>${rows.map(r => `
-      <tr class="${r.fullyMonth === bestFull ? 'best' : ''}">
-        <td>${r.label}${r.fullyMonth === bestFull ? ' <span class="cmp-best-tag">✦ fastest</span>' : ''}</td>
+      <tr class="${r === best ? 'best' : ''}">
+        <td>${r.label}${r === best ? ' <span class="cmp-best-tag">✦ least interest</span>' : ''}</td>
         <td>${monthsToDate(r.consumerMonth)}</td>
         <td>${monthsToDate(r.fullyMonth)}</td>
         <td>${fmt(r.totalInterest)}</td>
       </tr>`).join('')}</tbody>`;
   document.getElementById('cmp-table').innerHTML = html;
+  const note = document.getElementById('cmp-note');
+  if (note) note.innerHTML = `Ranked by <strong>total interest paid</strong> — the real prize, since every strategy puts the same amount toward debt each month. Differences are usually small: they come down to <em>which</em> debt your overpayment hits first. These figures assume freed-up minimums aren't automatically rolled into the next debt.`;
 }
 
 // Optimal allocation: rank every use of a PLN by its guaranteed return (debt rate or savings APY).
@@ -2898,6 +2975,13 @@ function toggleZoom() {
 function onStarterAmount(v) { projState.starterAmount = Math.max(0, parseNum(v) || 0); saveProjState(); recalc(); }
 function onSavingsGoal(v)   { projState.savingsGoal = Math.max(0, parseNum(v) || 0); saveProjState(); recalc(); }
 function onParallelToggle(checked) { projState.parallel = !!checked; saveProjState(); recalc(); }
+function onSavMonthly(v)     { const n = parseNum(v); projState.savMonthly = (v === '' || v == null) ? null : Math.max(0, n || 0); saveProjState(); drawSavingsGrowth(); }
+// Monthly deposit feeding the growth projection: explicit override → savings goal → recommended 20%-of-income.
+function savMonthlyEffective() {
+  if (projState.savMonthly != null) return projState.savMonthly;
+  if (projState.savingsGoal > 0) return projState.savingsGoal;
+  return recSavingsGoal();
+}
 function onApy(v)           { projState.apy = Math.max(0, Math.min(30, parseNum(v) || 0)); saveProjState(); drawSavingsGrowth(); }
 function onInflation(v)     { projState.inflation = Math.max(0, Math.min(30, parseNum(v) || 0)); saveProjState(); drawSavingsGrowth(); }
 
@@ -2911,7 +2995,16 @@ function drawSavingsGrowth() {
   if (inflEl && document.activeElement !== inflEl) inflEl.value = projState.inflation;
 
   const start = parseFloat(S.savings) || 0;
-  const monthly = projState.savingsGoal || 0;
+  const monthly = savMonthlyEffective();
+  const monEl = document.getElementById('sav-monthly');
+  if (monEl && document.activeElement !== monEl) monEl.value = monthly ? Math.round(monthly).toLocaleString('en-US') : '';
+  const depNote = document.getElementById('sav-deposit-note');
+  if (depNote) {
+    const srcTxt = projState.savMonthly != null ? 'your figure'
+      : projState.savingsGoal > 0 ? 'your monthly savings goal'
+      : 'a recommended ~20% of income (edit to change)';
+    depNote.textContent = `Compounding ~${Math.round(monthly).toLocaleString('en-US')} PLN/mo (${srcTxt}) at your APY. “Today’s money” discounts the balance by inflation so you see real buying power.`;
+  }
   const r = (projState.apy || 0) / 100 / 12;
   const infl = (projState.inflation || 0) / 100 / 12; // monthly inflation
   const MONTHS = 360;
