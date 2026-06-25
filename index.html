@@ -2390,7 +2390,7 @@ function renderAllocation() {
       return `
         <div class="ratio">
           <div class="ratio-head"><span class="rn">${r.name}</span>
-            <span class="rv" style="color:${good ? 'var(--green)' : 'var(--amber)'}">${Math.round(r.val * 100)}%</span></div>
+            <span class="rv" style="color:${good ? 'var(--green)' : 'var(--amber)'}">${good ? '✓' : '⚠'} ${Math.round(r.val * 100)}%</span></div>
           <div class="ratio-bar-bg">
             <div class="ratio-bar" style="width:${pct}%;background:${good ? 'var(--green)' : 'var(--amber)'}"></div>
             <div class="ratio-bench" style="left:${benchPct}%" title="benchmark ${Math.round(r.bench*100)}%">
