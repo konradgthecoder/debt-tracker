@@ -48,14 +48,23 @@ Only if `S.lastAmortizedMonth !== nowLabel()`. For each debt (in native currency
 If the month was already amortized, this step is **skipped** — recording a second action in the same month must not advance the loans again.
 
 **2. Apply extra payments — every time Apply is pressed.**
-For each debt allocation, `balance -= amount`; for each Savings allocation, `savings += amount`. Foreign debt amounts convert from PLN via `cadRate`. Clamp balances at 0.
+For each debt allocation, `balance -= (amount − interestPaid)`; for each Savings allocation, `savings += amount`. Foreign debt amounts convert from PLN via `cadRate`. Clamp balances at 0. `interestPaid` defaults to 0 (so by default the full cash reduces principal).
 
 **3. Record the month:** write/update the Monthly Log entry for this month (reusing `snapshotDetail()`/`addLogRow`), with the cumulative `allocations`.
 
 **4. Re-render** (`renderAll`/`recalc`) so balances, months-left, free cash, projection and chart update.
 
-### The allocation amount = cash paid (not principal)
-The number the user enters is **the cash they actually pay**, which both (a) reduces free cash for the month and (b) reduces the balance by the same figure. The app does **not** model the daily-interest portion of an overpayment (Polish loans accrue interest daily from the last payment, so a few days' interest is paid first and only the remainder hits principal). That sliver is the small gap between the app's running estimate and the bank's exact balance, **reconciled by overwriting the balance from a statement**. Rationale: the split is the bank's proprietary daily calc, and free cash must reflect total cash out — so one "cash paid" number is both correct for free cash and a good-enough principal estimate.
+### The allocation amount = cash paid (with an optional interest split)
+The number the user enters is **the cash they actually pay**, which always reduces free cash for the month by that full figure. By default, that same amount reduces the balance (simple path: cash paid = principal reduction).
+
+Polish loans accrue interest **daily from the last payment**, so an overpayment really pays a few days' interest first and only the remainder hits principal. To make this exact when the user has the bank's breakdown, each debt allocation row offers an **optional "interest paid" field** (advanced, hidden by default, defaults to 0):
+- Free cash is reduced by the **full cash paid** (`amount`) — it's real money out.
+- The balance is reduced by **`amount − interestPaid`** — only the principal portion.
+
+So: leave it blank and the full payment reduces principal (good-enough estimate, reconcile later if needed); fill it in from the bank's overpayment confirmation and the balance is exact with no later reconciliation. Either way one "cash paid" number drives free cash; the app never guesses the daily split itself.
+
+### Overpayment convention: term vs rata
+By default an overpayment **shortens the term** and keeps the monthly payment fixed — `calcMonths()` recomputes a nearer payoff automatically. But some banks instead **keep the term and lower the rata**. To support both: after an overpayment is applied to an interest-bearing debt whose **principal reduction is smaller than that debt's current monthly payment** (the signal that the bank likely lowered the rata rather than dropping a whole month), the app **prompts for the new monthly payment** — "Did <debt>'s monthly payment change? Enter the new rata, or keep the current one." If the user enters a value, the debt's `min` (payment) is updated and months-left/payoff recompute from it; if they keep it, the term simply shortens as before. Optional and dismissable — no prompt for 0%-interest debts.
 
 ### Idempotency / corrections
 - **Amortization** is guarded to once per calendar month via `lastAmortizedMonth`. Pressing Apply again the same month re-applies only the new extra payments — it does not re-amortize.
@@ -74,7 +83,7 @@ Adjust the free-cash / obligations math so a **debt at ≤ 0 balance no longer c
 ## Data model changes
 
 - `S.lastAmortizedMonth` (string, e.g. `"June 2026"`) — ensures the monthly rata advances the loans at most once per calendar month; `normalizeState()` backfills to `''`.
-- Log entry detail gains `allocations: [{ target, amount }]` (target = debt name or `"Savings"`). Backward compatible (older entries simply lack it).
+- Log entry detail gains `allocations: [{ target, amount, interestPaid? }]` (target = debt name or `"Savings"`; `interestPaid` optional, defaults 0, debt rows only). Backward compatible (older entries simply lack it).
 - Transient panel state (free-cash override, in-progress allocation rows) held in a module-level JS object, not persisted until Apply.
 
 ## Edge cases
@@ -87,9 +96,8 @@ Adjust the free-cash / obligations math so a **debt at ≤ 0 balance no longer c
 
 ## Out of scope (YAGNI)
 
-- Modeling the daily-interest portion of an overpayment (interest accrued since the last payment). The user enters cash paid; the small principal-vs-interest sliver is reconciled from the bank statement.
+- *Computing* the daily-interest portion of an overpayment. The app never derives it — the user optionally enters it from the bank's breakdown (the advanced "interest paid" field); left blank, the full cash reduces principal.
 - Reversing/undoing the monthly amortization (use manual balance overwrite).
-- Modeling the "lower the monthly payment, keep the term" overpayment convention (the app models "shorten the term, keep payment"; users on the other convention reconcile the payment field manually).
 - Auto-pulling the recommended split from the AI text; the recommendation comes from the existing deterministic optimizer.
 - Per-savings-bucket targeting (single Savings total for now).
 
