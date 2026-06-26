@@ -342,6 +342,49 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
 .snap-total-key { font-weight: 700; font-size: 0.88rem; }
 .snap-total-val { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
+/* lifetime cost context under the debts table */
+.debt-life-note { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 0.7rem 0 0; }
+.debt-life-note strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.debt-life-note:empty { display: none; }
+
+/* ─── "This Month" allocation panel ─── */
+.tm-card { background: linear-gradient(180deg, var(--card2), var(--card)); border: 1px solid var(--border2); border-radius: 12px; padding: 1.1rem 1.2rem 1.25rem; margin-bottom: 1.5rem; }
+.tm-card:empty { display: none; }
+.tm-empty { font-size: 0.85rem; color: var(--muted); }
+.tm-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.9rem; }
+.tm-title { font-weight: 750; font-size: 1rem; letter-spacing: -0.01em; }
+.tm-month { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tm-free { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; background: rgba(15,184,160,0.07); border: 1px solid rgba(15,184,160,0.22); border-radius: 9px; padding: 0.55rem 0.8rem; }
+.tm-free-k { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.tm-free-v { font-weight: 600; color: var(--teal); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tm-free-inp { width: 6.5rem; text-align: right; background: transparent; border: none; border-bottom: 1px solid var(--border2); color: var(--teal); font-family: inherit; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; outline: none; padding: 0 0.2rem 0.1rem; }
+.tm-free-inp:focus { border-color: var(--teal); }
+.tm-reco { font-size: 0.8rem; color: var(--muted); margin: 0.8rem 0 0.2rem; line-height: 1.45; }
+.tm-use { color: var(--teal); cursor: pointer; text-decoration: underline; font-weight: 600; }
+.tm-use:hover { color: var(--green); }
+.tm-rows { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.7rem 0 0.2rem; }
+.tm-row { display: grid; grid-template-columns: 1fr 6rem 4.5rem 1.4rem; gap: 0.5rem; align-items: center; }
+.tm-row.nosav { grid-template-columns: 1fr 6rem 1.4rem; }
+.tm-target, .tm-amt, .tm-int { background: var(--navy); border: 1px solid var(--border2); border-radius: 7px; padding: 0.45rem 0.6rem; color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; }
+.tm-target { min-width: 0; }
+.tm-amt, .tm-int { text-align: right; font-variant-numeric: tabular-nums; min-width: 0; }
+.tm-int { color: var(--muted); font-size: 0.82rem; }
+.tm-amt:focus, .tm-int:focus, .tm-target:focus { border-color: var(--teal); }
+.tm-x { background: none; border: none; color: var(--dim); font-size: 1.1rem; cursor: pointer; padding: 0; }
+.tm-x:hover { color: var(--coral); }
+.tm-add { width: 100%; background: transparent; border: 1px dashed var(--border2); border-radius: 7px; color: var(--muted); font-family: inherit; font-size: 0.78rem; padding: 0.45rem; cursor: pointer; margin-top: 0.1rem; }
+.tm-add:hover { border-color: var(--teal); color: var(--teal); }
+.tm-tally { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; margin: 0.9rem 0 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }
+.tm-apply { display: block; width: 100%; text-align: center; background: rgba(15,184,160,0.16); color: var(--teal); border: 1px solid rgba(15,184,160,0.4); border-radius: 9px; padding: 0.65rem; font-weight: 700; font-size: 0.9rem; font-family: inherit; cursor: pointer; }
+.tm-apply:hover { background: rgba(15,184,160,0.24); }
+.tm-note { font-size: 0.72rem; color: var(--dim); margin-top: 0.6rem; line-height: 1.4; }
+@media (max-width: 620px) {
+  .tm-row { grid-template-columns: 1fr 4.6rem 3.8rem 1.2rem; gap: 0.35rem; }
+  .tm-row.nosav { grid-template-columns: 1fr 4.6rem 1.2rem; }
+  .tm-target, .tm-amt, .tm-int { padding: 0.4rem 0.45rem; font-size: 16px; }
+  .tm-free-inp { font-size: 16px; }
+}
+
 /* progress bars in payoff card */
 .prog-item { display: flex; flex-direction: column; gap: 0.3rem; }
 .prog-row { display: flex; justify-content: space-between; width: 100%; font-size: 0.85rem; }
@@ -876,6 +919,7 @@ html, body { max-width: 100%; overflow-x: clip; }
         </tfoot>
       </table>
     </div>
+    <p class="debt-life-note" id="debt-life-note"></p>
   </section>
 
   <!-- MONTHLY COSTS -->
@@ -922,6 +966,7 @@ html, body { max-width: 100%; overflow-x: clip; }
       <span class="section-title">Monthly snapshot</span>
       <div class="section-line"></div>
     </div>
+    <div id="this-month" class="tm-card"></div>
     <div class="snap-grid">
 
       <div class="snap-card">
@@ -1313,6 +1358,7 @@ function freshState() {
     income: '', savings: '',
     cadRate: null, cadRateFetchedAt: null,
     log: [],
+    lastAmortizedMonth: '',
   };
 }
 
@@ -2120,6 +2166,161 @@ function snapshotNow() {
   document.getElementById('log-body').scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
+// ─── "This Month" monthly allocation ────────────────────────────────────────
+// Each month is a one-off decision: see this month's free cash, allocate it across
+// debts + savings, and Apply — which amortizes the loans once for the month and
+// applies your extra payments. The long-term plan (Simulator) stays the "aim".
+let tmState = { freeOverride: null, rows: null }; // transient; reset after each Apply
+
+function tmRound(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+function tmPlnBal(d) { const b = parseFloat(d.balance) || 0; return d.type === 'foreign' ? b * (S.cadRate || 0) : b; }
+function tmActiveDebts() { return S.debts.map((d, i) => ({ d, i })).filter(x => tmPlnBal(x.d) > 0.005); }
+function tmFreeThisMonth() { return tmState.freeOverride != null ? tmState.freeOverride : Math.max(0, Math.round(_calc.free || 0)); }
+
+// Suggested split: highest-rate debt above the savings APY cutoff first (to its
+// balance), then whatever's left to savings.
+function recommendedAllocations(free) {
+  const rows = []; let rem = free; const cutoff = hiCutoff();
+  const ranked = tmActiveDebts().map(x => ({ i: x.i, bal: tmPlnBal(x.d), rate: parseFloat(x.d.rate) || 0 }))
+    .filter(x => x.rate >= cutoff).sort((a, b) => b.rate - a.rate);
+  for (const x of ranked) { if (rem <= 0.5) break; const amt = Math.min(rem, x.bal); rows.push({ target: x.i, amount: Math.round(amt), interest: 0 }); rem -= amt; }
+  if (rem > 0.5) rows.push({ target: 'savings', amount: Math.round(rem), interest: 0 });
+  if (!rows.length) { const first = tmActiveDebts()[0]; rows.push({ target: first ? first.i : 'savings', amount: 0, interest: 0 }); }
+  return rows;
+}
+function tmRecoText() {
+  const rec = recommendedAllocations(tmFreeThisMonth()).filter(r => r.amount > 0);
+  if (!rec.length) return 'nothing to deploy yet';
+  return rec.map(r => (r.target === 'savings' ? 'Savings' : esc(S.debts[r.target] ? S.debts[r.target].name : 'Debt')) + ' ' + fmt0(r.amount)).join(' · ');
+}
+
+function renderThisMonth() {
+  const el = document.getElementById('this-month'); if (!el) return;
+  if (!(S.income > 0)) { el.innerHTML = '<div class="tm-empty">Enter your monthly income above to plan where this month’s free cash goes.</div>'; return; }
+  if (tmState.rows == null) tmState.rows = recommendedAllocations(tmFreeThisMonth());
+  const month = nowLabel(), free = tmFreeThisMonth(), debts = tmActiveDebts();
+  const opts = sel => debts.map(x => `<option value="${x.i}" ${String(x.i) === String(sel) ? 'selected' : ''}>${esc(x.d.name || 'Debt')}</option>`).join('')
+    + `<option value="savings" ${sel === 'savings' ? 'selected' : ''}>Savings</option>`;
+  const rowsHtml = tmState.rows.map((r, k) => {
+    const isSav = r.target === 'savings';
+    return `<div class="tm-row${isSav ? ' nosav' : ''}">
+      <select class="tm-target" onchange="tmSetTarget(${k},this.value)">${opts(r.target)}</select>
+      <input class="tm-amt" type="text" inputmode="decimal" value="${r.amount || ''}" oninput="tmSetAmount(${k},this.value)" placeholder="0" aria-label="amount">
+      ${isSav ? '' : `<input class="tm-int" type="text" inputmode="decimal" value="${r.interest || ''}" oninput="tmSetInterest(${k},this.value)" placeholder="int" title="Optional: the interest portion of this payment from the bank. Leave blank to put it all toward principal.">`}
+      <button class="tm-x" onclick="tmRemoveRow(${k})" title="Remove" aria-label="Remove allocation">×</button>
+    </div>`;
+  }).join('');
+  const amortized = S.lastAmortizedMonth === month;
+  el.innerHTML = `
+    <div class="tm-head"><span class="tm-title">This month</span><span class="tm-month">${month}</span></div>
+    <div class="tm-free"><span class="tm-free-k">Free cash this month</span>
+      <span class="tm-free-v"><input class="tm-free-inp" type="text" inputmode="decimal" value="${free}" oninput="tmSetFree(this.value)" aria-label="Free cash this month"> PLN</span></div>
+    <div class="tm-reco">Suggested: ${tmRecoText()} <span class="tm-use" onclick="tmUseRecommended()">use</span></div>
+    <div class="tm-rows">${rowsHtml}</div>
+    <button class="tm-add" onclick="tmAddRow()">+ add allocation</button>
+    <div class="tm-tally" id="tm-tally"></div>
+    <button class="tm-apply" onclick="applyThisMonth()">✓ Apply &amp; record this month</button>
+    <div class="tm-note">${amortized
+      ? 'Loans already advanced for ' + month + ' — applying again records only the new payments.'
+      : 'Applying advances each loan one month (interest + minimum) and applies your extra payments.'}</div>`;
+  updateTmTally();
+}
+
+function updateTmTally() {
+  const t = document.getElementById('tm-tally'); if (!t) return;
+  const free = tmFreeThisMonth();
+  const alloc = (tmState.rows || []).reduce((s, r) => s + (r.amount || 0), 0);
+  const left = free - alloc, over = left < -0.5;
+  t.innerHTML = `<span>Allocated ${fmt0(alloc)} / ${fmt0(free)} free</span>`
+    + `<span style="color:${over ? 'var(--amber)' : 'var(--green)'}">${over ? fmt0(-left) + ' over' : fmt0(Math.max(0, left)) + ' left'}</span>`;
+}
+
+function tmSetTarget(k, v) { if (!tmState.rows[k]) return; tmState.rows[k].target = v === 'savings' ? 'savings' : parseInt(v, 10); if (v === 'savings') tmState.rows[k].interest = 0; renderThisMonth(); }
+function tmSetAmount(k, v) { if (tmState.rows[k]) { tmState.rows[k].amount = Math.max(0, parseNum(v) || 0); updateTmTally(); } }
+function tmSetInterest(k, v) { if (tmState.rows[k]) tmState.rows[k].interest = Math.max(0, parseNum(v) || 0); }
+function tmSetFree(v) { tmState.freeOverride = Math.max(0, parseNum(v) || 0); updateTmTally(); }
+function tmAddRow() { const first = tmActiveDebts()[0]; (tmState.rows = tmState.rows || []).push({ target: first ? first.i : 'savings', amount: 0, interest: 0 }); renderThisMonth(); }
+function tmRemoveRow(k) { tmState.rows.splice(k, 1); renderThisMonth(); }
+function tmUseRecommended() { tmState.rows = recommendedAllocations(tmFreeThisMonth()); renderThisMonth(); }
+
+function applyThisMonth() {
+  const month = nowLabel(), cadRate = S.cadRate || 0;
+  const rows = tmState.rows || [];
+  const hasExtras = rows.some(r => (r.amount || 0) > 0);
+  const willAmortize = S.lastAmortizedMonth !== month;
+  if (!willAmortize && !hasExtras) { toast('Nothing to record — add an allocation first', 'err'); return; }
+  // a foreign-debt extra payment needs the CAD→PLN rate to convert; bail rather than divide by zero
+  const needsRate = rows.some(r => (r.amount || 0) > 0 && r.target !== 'savings' && S.debts[r.target] && S.debts[r.target].type === 'foreign');
+  if (needsRate && !cadRate) { toast('Set the CAD→PLN rate before recording a foreign-debt payment', 'err'); return; }
+
+  // 1) amortize each loan once for the month
+  if (willAmortize) {
+    S.debts.forEach(d => {
+      let bal = parseFloat(d.balance) || 0; if (bal <= 0.005) return;
+      const rate = parseFloat(d.rate) || 0, min = parseFloat(d.min) || 0; // native units
+      const interest = bal * rate / 100 / 12;
+      bal = bal + interest - Math.min(min, bal + interest);
+      d.balance = tmRound(Math.max(0, bal));
+    });
+    S.lastAmortizedMonth = month;
+  }
+
+  // 2) apply extra payments (repeatable within a month)
+  const rataDebts = [];
+  const allocations = [];
+  rows.forEach(r => {
+    const cash = r.amount || 0; if (cash <= 0) return;
+    if (r.target === 'savings') {
+      S.savings = tmRound((parseFloat(S.savings) || 0) + cash);
+      allocations.push({ target: 'Savings', amount: cash });
+      return;
+    }
+    const d = S.debts[r.target]; if (!d) return;
+    const isF = d.type === 'foreign';
+    const principalPLN = cash - (r.interest || 0);
+    const principalNative = isF && cadRate ? principalPLN / cadRate : principalPLN;
+    d.balance = tmRound(Math.max(0, (parseFloat(d.balance) || 0) - principalNative));
+    allocations.push({ target: d.name || 'Debt', amount: cash, interestPaid: r.interest || 0 });
+    const rate = parseFloat(d.rate) || 0, minNative = parseFloat(d.min) || 0;
+    if (rate > 0 && principalNative > 0 && principalNative < minNative) rataDebts.push(r.target);
+  });
+
+  // 3) refresh balances/inputs, then record the month against the fresh figures
+  persist();
+  renderAll();
+  tmRecordMonth(month, allocations);
+  tmState.rows = null; tmState.freeOverride = null;
+  persist();
+  renderLog();
+  renderThisMonth();
+  toast('Recorded ' + month + ' ✓', 'ok');
+
+  // 4) for small overpayments the bank may have lowered the rata — offer to update it
+  rataDebts.forEach(idx => tmPromptRata(idx));
+}
+
+function tmRecordMonth(month, allocations) {
+  const existing = (S.log || []).find(r => r.month === month);
+  const detail = snapshotDetail(); detail.allocations = allocations;
+  const base = {
+    month, debt: _calc.totalBalance || '',
+    free: _calc.free != null ? Math.round(_calc.free) : '',
+    runway: _calc.runway != null ? parseFloat(_calc.runway.toFixed(1)) : '',
+    savings: S.savings || '', detail,
+  };
+  if (existing) Object.assign(existing, base);
+  else S.log.unshift({ notes: '', ...base });
+}
+
+function tmPromptRata(idx) {
+  const d = S.debts[idx]; if (!d) return;
+  const cur = parseFloat(d.min) || 0;
+  const v = window.prompt(`${d.name || 'Debt'}: did your monthly payment change after this overpayment?\n\nEnter the new monthly payment, or leave blank / Cancel to keep ${fmt0(cur)} (the term just shortens instead).`, '');
+  if (v == null || String(v).trim() === '') return;
+  const n = parseNum(v);
+  if (n > 0) { d.min = tmRound(n); persist(); renderAll(); toast((d.name || 'Debt') + ' payment updated to ' + fmt0(n), 'ok'); }
+}
+
 // ─── Recalc ────────────────────────────────────────────────────────────────
 function recalc() {
   S.income  = parseNum(document.getElementById('s-income').value)  || 0;
@@ -2129,7 +2330,7 @@ function recalc() {
   updateRateBar();
   const cadRate = S.cadRate || 0;
 
-  let totalBalance = 0, totalMin = 0, totalInt = 0;
+  let totalBalance = 0, totalMin = 0, totalInt = 0, lifetimePaid = 0;
   S.debts.forEach((d, i) => {
     const balRaw = parseFloat(d.balance) || 0;
     const minRaw = parseFloat(d.min)     || 0;
@@ -2138,9 +2339,10 @@ function recalc() {
     const min  = isForeign ? minRaw * cadRate : minRaw;
     const debtRate = parseFloat(d.rate) || 0;
     totalBalance += bal;
-    totalMin     += min;
+    if (bal > 0.005) totalMin += min; // a cleared debt no longer carries its minimum → frees up cash next month
     // months calc uses PLN-equivalent values
     const months = calcMonths(bal, debtRate, min);
+    if (bal > 0.005 && min > 0 && Number.isFinite(months) && months > 0) lifetimePaid += months * min;
     const mEl = document.getElementById(`months-${i}`);
     const pEl = document.getElementById(`payoff-${i}`);
     const iEl = document.getElementById(`int-${i}`);
@@ -2158,6 +2360,14 @@ function recalc() {
   document.getElementById('total-min').textContent     = totalMin > 0     ? fmt(totalMin)     : '—';
   const totIntEl = document.getElementById('total-int');
   if (totIntEl) { totIntEl.textContent = totalInt > 0.005 ? fmt(totalInt) : '—'; totIntEl.style.color = totalInt > 0.005 ? 'var(--coral)' : ''; }
+  // lifetime context: capital owed vs total you'll pay vs interest, at current payments
+  const lifeEl = document.getElementById('debt-life-note');
+  if (lifeEl) {
+    const lifeInt = Math.max(0, lifetimePaid - totalBalance);
+    lifeEl.innerHTML = (lifetimePaid > 0 && totalBalance > 0)
+      ? `Capital owed <strong>${fmt(totalBalance)}</strong> · at current payments you'll pay <strong>${fmt(lifetimePaid)}</strong> total over the full term, of which <strong style="color:var(--coral)">${fmt(lifeInt)}</strong> is interest. Overpaying cuts the interest and shortens the term.`
+      : '';
+  }
 
   // fixed costs total
   const totalCosts = (S.costs || []).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
@@ -2226,6 +2436,7 @@ function recalc() {
   renderAllocation();
   drawSavingsGrowth();   // keep the Savings-growth tab live (goal/APY/inflation/savings changes)
   renderOnboard();       // hide the welcome banner as soon as income is entered
+  renderThisMonth();     // the monthly allocation panel (uses _calc.free)
 }
 
 // ─── Collapsible sections (per-device UI pref, not synced) ──────────────────
