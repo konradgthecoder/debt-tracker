@@ -38,19 +38,29 @@ Contents:
 
 ## What "Apply & record" does
 
-For the current calendar month, against the real stored balances:
+Two distinct events, against the real stored balances. **They are decoupled** — the monthly rata advances the loans once a month; overpayments can be recorded any number of times.
 
-1. **Amortize each debt one month** (in the debt's native currency for foreign debts):
-   - `interest = balance × rate ÷ 100 ÷ 12` (0 for 0%-interest debts).
-   - `balance += interest; balance -= min(payment, balance)` (freed minimum from a cleared debt is NOT auto-redirected — matches the engine's existing rule).
-2. **Apply extra allocations:** for each debt allocation, `balance -= amount` (foreign: convert the PLN amount to native via `cadRate`); clamp at 0. For each Savings allocation, `savings += amount`.
-3. **Record the month:** write/update the Monthly Log entry for this month (reusing `snapshotDetail()`/`addLogRow`), augmented with the `allocations` made.
-4. **Mark applied:** set `S.lastAppliedMonth = nowLabel()` so the panel locks for the month.
-5. **Re-render** (`renderAll`/`recalc`) so balances, months-left, free cash, projection and chart update.
+**1. Monthly amortization — runs at most once per calendar month.**
+Only if `S.lastAmortizedMonth !== nowLabel()`. For each debt (in native currency for foreign debts):
+- `interest = balance × rate ÷ 100 ÷ 12` (0 for 0%-interest debts).
+- `balance += interest; balance -= min(payment, balance)` (freed minimum from a cleared debt is NOT auto-redirected — matches the engine's existing rule).
+- Then set `S.lastAmortizedMonth = nowLabel()`.
+If the month was already amortized, this step is **skipped** — recording a second action in the same month must not advance the loans again.
+
+**2. Apply extra payments — every time Apply is pressed.**
+For each debt allocation, `balance -= amount`; for each Savings allocation, `savings += amount`. Foreign debt amounts convert from PLN via `cadRate`. Clamp balances at 0.
+
+**3. Record the month:** write/update the Monthly Log entry for this month (reusing `snapshotDetail()`/`addLogRow`), with the cumulative `allocations`.
+
+**4. Re-render** (`renderAll`/`recalc`) so balances, months-left, free cash, projection and chart update.
+
+### The allocation amount = cash paid (not principal)
+The number the user enters is **the cash they actually pay**, which both (a) reduces free cash for the month and (b) reduces the balance by the same figure. The app does **not** model the daily-interest portion of an overpayment (Polish loans accrue interest daily from the last payment, so a few days' interest is paid first and only the remainder hits principal). That sliver is the small gap between the app's running estimate and the bank's exact balance, **reconciled by overwriting the balance from a statement**. Rationale: the split is the bank's proprietary daily calc, and free cash must reflect total cash out — so one "cash paid" number is both correct for free cash and a good-enough principal estimate.
 
 ### Idempotency / corrections
-- Amortization is one-way (not cleanly reversible). After applying, the panel shows `✓ Applied for <Month>` and the button is disabled until the next calendar month.
-- Corrections are made by **overwriting balances manually** (balances stay editable everywhere). Re-applying the same month is blocked to avoid double-amortizing.
+- **Amortization** is guarded to once per calendar month via `lastAmortizedMonth`. Pressing Apply again the same month re-applies only the new extra payments — it does not re-amortize.
+- **Overpayments** are intentionally repeatable within a month (you may overpay more than once). The Log entry accumulates them.
+- Corrections (including the daily-interest sliver) are made by **overwriting balances manually** — balances stay editable everywhere; the bank is always the source of truth.
 
 ## Freed-up cash grows automatically
 
@@ -63,7 +73,7 @@ Adjust the free-cash / obligations math so a **debt at ≤ 0 balance no longer c
 
 ## Data model changes
 
-- `S.lastAppliedMonth` (string, e.g. `"June 2026"`) — guards idempotency; `normalizeState()` backfills to `''`.
+- `S.lastAmortizedMonth` (string, e.g. `"June 2026"`) — ensures the monthly rata advances the loans at most once per calendar month; `normalizeState()` backfills to `''`.
 - Log entry detail gains `allocations: [{ target, amount }]` (target = debt name or `"Savings"`). Backward compatible (older entries simply lack it).
 - Transient panel state (free-cash override, in-progress allocation rows) held in a module-level JS object, not persisted until Apply.
 
@@ -77,7 +87,8 @@ Adjust the free-cash / obligations math so a **debt at ≤ 0 balance no longer c
 
 ## Out of scope (YAGNI)
 
-- Reversing/undoing an applied month (use manual balance overwrite).
+- Modeling the daily-interest portion of an overpayment (interest accrued since the last payment). The user enters cash paid; the small principal-vs-interest sliver is reconciled from the bank statement.
+- Reversing/undoing the monthly amortization (use manual balance overwrite).
 - Modeling the "lower the monthly payment, keep the term" overpayment convention (the app models "shorten the term, keep payment"; users on the other convention reconcile the payment field manually).
 - Auto-pulling the recommended split from the AI text; the recommendation comes from the existing deterministic optimizer.
 - Per-savings-bucket targeting (single Savings total for now).
