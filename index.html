@@ -2175,7 +2175,17 @@ let tmState = { freeOverride: null, rows: null }; // transient; reset after each
 function tmRound(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 function tmPlnBal(d) { const b = parseFloat(d.balance) || 0; return d.type === 'foreign' ? b * (S.cadRate || 0) : b; }
 function tmActiveDebts() { return S.debts.map((d, i) => ({ d, i })).filter(x => tmPlnBal(x.d) > 0.005); }
-function tmFreeThisMonth() { return tmState.freeOverride != null ? tmState.freeOverride : Math.max(0, Math.round(_calc.free || 0)); }
+// cash already deployed this calendar month (sum of extra payments recorded in the Log)
+function tmDeployedThisMonth() {
+  const e = (S.log || []).find(r => r.month === nowLabel());
+  const a = (e && e.detail && e.detail.allocations) || [];
+  return a.reduce((s, x) => s + (x.amount || 0), 0);
+}
+// free cash still available to allocate this month = monthly free cash − what's already been deployed
+function tmFreeThisMonth() {
+  if (tmState.freeOverride != null) return tmState.freeOverride;
+  return Math.max(0, Math.round(_calc.free || 0) - tmDeployedThisMonth());
+}
 
 // Suggested split: highest-rate debt above the savings APY cutoff first (to its
 // balance), then whatever's left to savings.
@@ -2301,7 +2311,9 @@ function applyThisMonth() {
 
 function tmRecordMonth(month, allocations) {
   const existing = (S.log || []).find(r => r.month === month);
-  const detail = snapshotDetail(); detail.allocations = allocations;
+  // keep allocations cumulative so multiple overpayments in a month all count as deployed
+  const prior = (existing && existing.detail && existing.detail.allocations) || [];
+  const detail = snapshotDetail(); detail.allocations = prior.concat(allocations);
   const base = {
     month, debt: _calc.totalBalance || '',
     free: _calc.free != null ? Math.round(_calc.free) : '',
