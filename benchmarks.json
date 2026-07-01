@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-25",
+  "generatedAt": "2026-07-01",
   "country": "PL",
   "basis": "per person, per month, PLN",
   "note": "National per-capita averages from Poland's household final consumption by COICOP (Eurostat), ÷ population, EUR→PLN at NBP rate. Warsaw runs ~20-30% higher and a single late-20s person skews toward dining/transport/recreation — adjust. Baseline, not a target.",
@@ -8,38 +8,38 @@
     "Eurostat demo_pjan population (2025)",
     "NBP EUR/PLN reference rate"
   ],
-  "eurPln": 4.2878,
+  "eurPln": 4.2963,
   "population": 36497495,
   "approxSeed": false,
   "categories": [
     {
       "label": "Food & groceries (at home)",
       "coicop": "CP01",
-      "monthlyPLN": 781,
+      "monthlyPLN": 783,
       "dataYear": "2023"
     },
     {
       "label": "Alcohol & tobacco",
       "coicop": "CP02",
-      "monthlyPLN": 250,
+      "monthlyPLN": 251,
       "dataYear": "2023"
     },
     {
       "label": "Clothing & footwear",
       "coicop": "CP03",
-      "monthlyPLN": 188,
+      "monthlyPLN": 189,
       "dataYear": "2023"
     },
     {
       "label": "Housing, utilities, water, energy",
       "coicop": "CP04",
-      "monthlyPLN": 868,
+      "monthlyPLN": 870,
       "dataYear": "2023"
     },
     {
       "label": "Furnishings & household goods",
       "coicop": "CP05",
-      "monthlyPLN": 198,
+      "monthlyPLN": 199,
       "dataYear": "2023"
     },
     {
@@ -51,7 +51,7 @@
     {
       "label": "Transport (incl. fuel)",
       "coicop": "CP07",
-      "monthlyPLN": 539,
+      "monthlyPLN": 540,
       "dataYear": "2023"
     },
     {
@@ -63,7 +63,7 @@
     {
       "label": "Recreation & culture",
       "coicop": "CP09",
-      "monthlyPLN": 255,
+      "monthlyPLN": 256,
       "dataYear": "2023"
     },
     {
@@ -81,7 +81,7 @@
     {
       "label": "Other goods & services",
       "coicop": "CP12",
-      "monthlyPLN": 544,
+      "monthlyPLN": 546,
       "dataYear": "2023"
     }
   ]
