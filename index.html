@@ -976,7 +976,7 @@ html, body { max-width: 100%; overflow-x: clip; }
         <div class="snap-rows">
           <div class="snap-row">
             <span class="key">Monthly net income</span>
-            <span class="amt"><input class="editable" id="s-income" type="text" inputmode="decimal" placeholder="0.00" oninput="recalc()" onblur="reformatNum(this);recalc()" style="font-weight:700;color:var(--green)"></span>
+            <span class="amt"><input class="editable" id="s-income" type="text" placeholder="0.00" oninput="recalc()" onblur="reformatNum(this);recalc()" style="font-weight:700;color:var(--green)"></span>
           </div>
           <div class="snap-row">
             <span class="key">Debt payments (auto)</span>
@@ -1012,11 +1012,11 @@ html, body { max-width: 100%; overflow-x: clip; }
         <div class="snap-rows">
           <div class="snap-row">
             <span class="key">Current savings</span>
-            <span class="amt"><input class="editable" id="s-savings" type="text" inputmode="decimal" placeholder="0.00" style="font-weight:700;color:var(--green)" oninput="recalc()" onblur="reformatNum(this);recalc()"></span>
+            <span class="amt"><input class="editable" id="s-savings" type="text" placeholder="0.00" style="font-weight:700;color:var(--green)" oninput="recalc()" onblur="reformatNum(this);recalc()"></span>
           </div>
           <div class="snap-row">
             <span class="key">Monthly savings goal</span>
-            <span class="amt"><input class="editable" id="s-goal" type="text" inputmode="decimal" placeholder="0.00" style="text-align:right" oninput="onSavingsGoal(this.value)" onblur="reformatNum(this)"><div class="rec-hint" id="s-goal-rec" style="text-align:right"></div></span>
+            <span class="amt"><input class="editable" id="s-goal" type="text" placeholder="0.00" style="text-align:right" oninput="onSavingsGoal(this.value)" onblur="reformatNum(this)"><div class="rec-hint" id="s-goal-rec" style="text-align:right"></div></span>
           </div>
           <div class="snap-row">
             <span class="key"><label style="cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem"><input type="checkbox" id="s-parallel" onchange="onParallelToggle(this.checked)" style="width:auto"> Fund goal in parallel with debt</label></span>
@@ -1038,8 +1038,8 @@ html, body { max-width: 100%; overflow-x: clip; }
           </div>
         </div>
         <div class="sv-targets">
-          <span>Starter buffer <input class="editable sv-mini" id="s-starter-amount" type="text" inputmode="decimal" value="4000" style="width:64px" oninput="onStarterAmount(this.value)"> PLN</span>
-          <span>Full emergency fund <input class="editable sv-mini" id="s-ef-months" type="text" inputmode="decimal" value="6" oninput="onEfMonths(this.value)"> mo</span>
+          <span>Starter buffer <input class="editable sv-mini" id="s-starter-amount" type="text" value="4000" style="width:64px" oninput="onStarterAmount(this.value)"> PLN</span>
+          <span>Full emergency fund <input class="editable sv-mini" id="s-ef-months" type="text" value="6" oninput="onEfMonths(this.value)"> mo</span>
           <span id="s-outgoings-note"></span>
         </div>
       </div>
@@ -1131,7 +1131,7 @@ html, body { max-width: 100%; overflow-x: clip; }
           <div class="sim-row">
             <label class="insights-label">Extra / mo</label>
             <input type="range" class="sim-slider" id="sim-slider" min="0" max="100" value="0" oninput="onSliderInput(this.value)">
-            <input type="text" inputmode="decimal" class="sim-extra-input" id="sim-extra" value="0" onchange="onExtraInput(this.value)">
+            <input type="text" class="sim-extra-input" id="sim-extra" value="0" onchange="onExtraInput(this.value)">
             <span class="insights-label">PLN</span>
             <span class="rec-hint" id="sim-extra-rec"></span>
           </div>
@@ -1178,13 +1178,13 @@ html, body { max-width: 100%; overflow-x: clip; }
       <div class="proj-panel" id="panel-savings">
         <div class="sim-row">
           <label class="insights-label">Deposit /mo</label>
-          <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-monthly" style="width:84px" onchange="onSavMonthly(this.value)">
+          <input type="text" class="sim-extra-input" id="sav-monthly" style="width:84px" onchange="onSavMonthly(this.value)">
           <span class="insights-label">PLN</span>
           <label class="insights-label" style="margin-left:0.6rem">Assumed APY</label>
-          <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-apy" value="5" style="width:64px" onchange="onApy(this.value)" title="Also the debt-vs-save cutoff: debts priced above this APY get paid before topping up savings in the plan.">
+          <input type="text" class="sim-extra-input" id="sav-apy" value="5" style="width:64px" onchange="onApy(this.value)" title="Also the debt-vs-save cutoff: debts priced above this APY get paid before topping up savings in the plan.">
           <span class="insights-label">%</span>
           <label class="insights-label" style="margin-left:0.6rem">Inflation</label>
-          <input type="text" inputmode="decimal" class="sim-extra-input" id="sav-infl" value="3.5" style="width:64px" onchange="onInflation(this.value)">
+          <input type="text" class="sim-extra-input" id="sav-infl" value="3.5" style="width:64px" onchange="onInflation(this.value)">
           <span class="insights-label">%</span>
         </div>
         <span class="sim-marker" id="sav-deposit-note">APY compounded monthly (~4% cash, ~7% diversified). “Today’s money” discounts the balance by inflation so you see real buying power.</span>
@@ -2007,7 +2007,7 @@ function numInp(val, placeholder, handler, blurExtra) {
   // any blurExtra (e.g. re-render to refresh derived subtotals/sublines).
   const v = val === '' || val == null ? '' : Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const blur = 'reformatNum(this)' + (blurExtra ? ';' + blurExtra : '');
-  return `<input class="editable" type="text" inputmode="decimal" value="${esc(v)}" placeholder="${esc(placeholder)}" oninput="${handler}" onblur="${blur}">`;
+  return `<input class="editable" type="text" value="${esc(v)}" placeholder="${esc(placeholder)}" oninput="${handler}" onblur="${blur}">`;
 }
 
 // Parse a typed value into a number. Accepts plain numbers ("1,234.56"),
@@ -2261,8 +2261,8 @@ function renderThisMonth() {
     const isSav = r.target === 'savings';
     return `<div class="tm-row${isSav ? ' nosav' : ''}">
       <select class="tm-target" onchange="tmSetTarget(${k},this.value)">${opts(r.target)}</select>
-      <input class="tm-amt" type="text" inputmode="decimal" value="${r.amount || ''}" oninput="tmSetAmount(${k},this.value)" placeholder="0" aria-label="amount">
-      ${isSav ? '' : `<input class="tm-int" type="text" inputmode="decimal" value="${r.interest || ''}" oninput="tmSetInterest(${k},this.value)" placeholder="int" title="Optional: the interest portion of this payment from the bank. Leave blank to put it all toward principal.">`}
+      <input class="tm-amt" type="text" value="${r.amount || ''}" oninput="tmSetAmount(${k},this.value)" placeholder="0" aria-label="amount">
+      ${isSav ? '' : `<input class="tm-int" type="text" value="${r.interest || ''}" oninput="tmSetInterest(${k},this.value)" placeholder="int" title="Optional: the interest portion of this payment from the bank. Leave blank to put it all toward principal.">`}
       <button class="tm-x" onclick="tmRemoveRow(${k})" title="Remove" aria-label="Remove allocation">×</button>
     </div>`;
   }).join('');
@@ -2270,7 +2270,7 @@ function renderThisMonth() {
   el.innerHTML = `
     <div class="tm-head"><span class="tm-title">This month</span><span class="tm-month">${month}</span></div>
     <div class="tm-free"><span class="tm-free-k">Free cash this month</span>
-      <span class="tm-free-v"><input class="tm-free-inp" type="text" inputmode="decimal" value="${free}" oninput="tmSetFree(this.value)" aria-label="Free cash this month"> PLN</span></div>
+      <span class="tm-free-v"><input class="tm-free-inp" type="text" value="${free}" oninput="tmSetFree(this.value)" aria-label="Free cash this month"> PLN</span></div>
     <div class="tm-reco">Suggested: ${tmRecoText()} <span class="tm-use" onclick="tmUseRecommended()">use</span></div>
     <div class="tm-rows">${rowsHtml}</div>
     <button class="tm-add" onclick="tmAddRow()">+ add allocation</button>
