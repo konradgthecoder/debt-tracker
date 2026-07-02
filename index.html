@@ -121,12 +121,29 @@ body {
 .onboard-x { position: absolute; top: 0.5rem; right: 0.7rem; background: none; border: none; color: var(--dim); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0; }
 .onboard-x:hover { color: var(--text); }
 
-/* ─── Section nav (sticky jump-to bar) ─── */
+/* ─── Section nav: view switcher + jump pills ─── */
 .section-nav {
   position: sticky; top: 0; z-index: 90;
-  display: flex; gap: 0.4rem; flex-wrap: wrap;
+  display: flex; gap: 0.5rem 0.9rem; flex-wrap: wrap; align-items: center;
   background: var(--navy); padding: 0.7rem 0 0.6rem; margin-bottom: -0.4rem;
 }
+.view-tabs { display: flex; background: var(--card); border: 1px solid var(--border2); border-radius: 999px; padding: 0.15rem; }
+.view-tab {
+  border: none; background: transparent; color: var(--muted); font-family: inherit;
+  font-size: 0.78rem; font-weight: 650; padding: 0.32rem 0.9rem; border-radius: 999px; cursor: pointer;
+  white-space: nowrap; transition: all 0.15s;
+}
+.view-tab:hover { color: var(--text); }
+.view-tab.active { background: rgba(15,184,160,0.18); color: var(--teal); }
+.sn-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+/* pills only for the active view's sections */
+main[data-view="data"] .sn-link[data-view="plan"],
+main[data-view="plan"] .sn-link[data-view="data"] { display: none; }
+/* sections belong to a view */
+main[data-view="data"] section[data-view="plan"],
+main[data-view="plan"] section[data-view="data"] { display: none; }
+/* onboarding banner only makes sense next to the data entry */
+main[data-view="plan"] .onboard { display: none; }
 .sn-link {
   padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--border2);
   background: transparent; color: var(--muted); font-size: 0.75rem; font-weight: 600;
@@ -611,9 +628,10 @@ tr.drag-target-below td { box-shadow: inset 0 -2px 0 var(--teal); }
   /* stack the savings-target label+input pairs so they don't crowd on a narrow screen */
   .sv-targets { flex-direction: column; gap: 0.6rem; }
   .sv-targets > span { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-  /* nav pins just under the sticky top ribbon (height measured into --ribbon-h) and
-     scrolls horizontally so the pills never wrap into a tall block */
-  .section-nav { top: var(--ribbon-h, 92px); flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* nav pins just under the sticky top ribbon (height measured into --ribbon-h);
+     the pill row scrolls horizontally so it never wraps into a tall block */
+  .section-nav { top: var(--ribbon-h, 92px); }
+  .sn-pills { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
 
   /* ─── Mobile card layout for data tables ─── */
   /* No sideways scroll: the wrap is a plain block, the table collapses to blocks. */
@@ -847,14 +865,20 @@ html, body { max-width: 100%; overflow-x: clip; }
 
 <main>
 
-  <!-- SECTION NAV (sticky jump-to bar) -->
-  <nav class="section-nav" id="section-nav" aria-label="Jump to section">
-    <button class="sn-link" data-target="debts"      onclick="scrollToSection('debts')">Debts</button>
-    <button class="sn-link" data-target="costs"       onclick="scrollToSection('costs')">Costs</button>
-    <button class="sn-link" data-target="snapshot"    onclick="scrollToSection('snapshot')">Snapshot</button>
-    <button class="sn-link" data-target="log"         onclick="scrollToSection('log')">Log</button>
-    <button class="sn-link" data-target="projection"  onclick="scrollToSection('projection')">Plan</button>
-    <button class="sn-link" data-target="insights"    onclick="scrollToSection('insights')">AI</button>
+  <!-- SECTION NAV: view switcher (Data vs Plan) + jump-to pills for the active view -->
+  <nav class="section-nav" id="section-nav" aria-label="Sections">
+    <div class="view-tabs" role="tablist">
+      <button class="view-tab" id="vt-data" role="tab" onclick="switchView('data')">✎ My data</button>
+      <button class="view-tab" id="vt-plan" role="tab" onclick="switchView('plan')">◎ Plan &amp; insights</button>
+    </div>
+    <div class="sn-pills">
+      <button class="sn-link" data-target="debts" data-view="data"      onclick="scrollToSection('debts')">Debts</button>
+      <button class="sn-link" data-target="costs" data-view="data"       onclick="scrollToSection('costs')">Costs</button>
+      <button class="sn-link" data-target="snapshot" data-view="plan"    onclick="scrollToSection('snapshot')">Snapshot</button>
+      <button class="sn-link" data-target="log" data-view="plan"         onclick="scrollToSection('log')">Log</button>
+      <button class="sn-link" data-target="projection" data-view="plan"  onclick="scrollToSection('projection')">Plan</button>
+      <button class="sn-link" data-target="insights" data-view="plan"    onclick="scrollToSection('insights')">AI</button>
+    </div>
   </nav>
 
   <!-- ONBOARDING (first run / empty state) -->
@@ -1465,6 +1489,7 @@ function renderOnboard() {
 }
 function dismissOnboard() { localStorage.setItem(ONBOARD_KEY, '1'); renderOnboard(); }
 function focusIncome() {
+  if (typeof switchView === 'function') switchView('plan');
   const inp = document.getElementById('s-income');
   if (!inp) return;
   inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2569,8 +2594,25 @@ function recalc() {
 const SEC_STORAGE = 'debt_tracker_sections';
 function loadSecState() { try { return JSON.parse(localStorage.getItem(SEC_STORAGE) || '{}'); } catch { return {}; } }
 function saveSecState(st) { localStorage.setItem(SEC_STORAGE, JSON.stringify(st)); }
+// ─── Views: "My data" (debts, costs) vs "Plan & insights" (snapshot, log, projection, AI)
+const VIEW_OF = { debts: 'data', costs: 'data', snapshot: 'plan', log: 'plan', projection: 'plan', insights: 'plan' };
+const VIEW_KEY = 'debt_tracker_view';
+function currentView() { return document.querySelector('main').dataset.view || 'plan'; }
+function switchView(v) {
+  document.querySelector('main').dataset.view = v;
+  document.getElementById('vt-data').classList.toggle('active', v === 'data');
+  document.getElementById('vt-plan').classList.toggle('active', v === 'plan');
+  localStorage.setItem(VIEW_KEY, v);
+}
+function initViews() {
+  document.querySelectorAll('section[data-sec]').forEach(s => { s.dataset.view = VIEW_OF[s.dataset.sec] || 'plan'; });
+  // default: data entry for a fresh user, the plan once income is set
+  switchView(localStorage.getItem(VIEW_KEY) || ((parseFloat(S.income) || 0) > 0 ? 'plan' : 'data'));
+}
+
 // ─── Section nav (sticky jump-to bar) ──────────────────────────────────────
 function scrollToSection(key) {
+  if (VIEW_OF[key] && VIEW_OF[key] !== currentView()) switchView(VIEW_OF[key]);
   const sec = document.querySelector(`section[data-sec="${key}"]`);
   if (!sec) return;
   // expand the section if it was collapsed so the jump lands on real content
@@ -4204,6 +4246,7 @@ window.addEventListener('resize', () => {
 
 renderAll();
 initSections();
+initViews();
 initSectionNav();
 loadBenchmarks();
 
