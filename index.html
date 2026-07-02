@@ -991,6 +991,7 @@ html, body { max-width: 100%; overflow-x: clip; }
             <span class="snap-total-key">💰 Free cash</span>
             <span class="snap-total-val" id="s-free">—</span>
           </div>
+          <div id="s-deployed" style="display:none;margin-top:0.55rem;padding:0.5rem 0.7rem;background:rgba(15,184,160,0.08);border:1px solid rgba(15,184,160,0.25);border-radius:8px;font-size:0.8rem;line-height:1.5;color:var(--muted)"></div>
           <div id="s-overbudget" class="rec-hint" style="color:var(--coral);display:none;margin-top:0.4rem">⚠ Over budget</div>
         </div>
         <div class="alloc-wrap" id="alloc-wrap" style="display:none">
@@ -2348,7 +2349,7 @@ function applyThisMonth() {
   tmState.rows = null; tmState.freeOverride = null;
   persist();
   renderLog();
-  renderThisMonth();
+  recalc();          // re-run now the month's allocations are recorded (deployed strip, panel)
   toast('Recorded ' + month + ' ✓', 'ok');
 
   // 4) for small overpayments the bank may have lowered the rata — offer to update it
@@ -2456,6 +2457,18 @@ function recalc() {
     const over = free !== null && free < 0;
     obEl.style.display = over ? 'block' : 'none';
     if (over) obEl.textContent = `⚠ Over budget by ${fmt(-free)}/mo — your debt payments and costs exceed your income`;
+  }
+  // show this month's deployments against the free-cash rate, so the draw-down is visible here too
+  const depEl = document.getElementById('s-deployed');
+  if (depEl) {
+    const entry = (S.log || []).find(r => r.month === nowLabel());
+    const allocs = (entry && entry.detail && entry.detail.allocations) || [];
+    const drawn = allocs.reduce((s, x) => s + (x.amount || 0), 0);
+    depEl.style.display = drawn > 0 ? 'block' : 'none';
+    if (drawn > 0 && free !== null) {
+      const left = Math.max(0, free - drawn);
+      depEl.innerHTML = `${allocs.length} payment${allocs.length !== 1 ? 's' : ''} this month · deployed <strong style="color:var(--teal)">${fmt(drawn)}</strong> · <strong style="color:${left > 0 ? 'var(--green)' : 'var(--amber)'}">${fmt(left)}</strong> left to allocate`;
+    }
   }
 
   renderSavings(runway, obligations, free);
@@ -3604,7 +3617,20 @@ function projectionSummary() {
 - Fully debt-free (incl. mortgage): ${monthsToDate(sim.fullyMonth)}${sim.fullyMonth != null ? ` (${monthsLabel(sim.fullyMonth)})` : ''}
 - Total interest remaining under this plan: ${fmt(sim.totalInterest)}
 ${savingsLine}
-`;
+${thisMonthSummary()}`;
+}
+
+// What the user has actually DONE this month (overpayments applied via the This-Month
+// panel) and what's still available — so advice starts from remaining cash, not the
+// full monthly figure.
+function thisMonthSummary() {
+  const entry = (S.log || []).find(r => r.month === nowLabel());
+  const allocs = (entry && entry.detail && entry.detail.allocations) || [];
+  const free = Math.max(0, Math.round(_calc.free || 0));
+  if (!allocs.length) return `- This month (${nowLabel()}): no extra payments made yet; ~${fmt(free)} free cash available to deploy.\n`;
+  const drawn = allocs.reduce((s, x) => s + (x.amount || 0), 0);
+  const lines = allocs.map(a => `${a.target} ${fmt(a.amount)}${a.interestPaid ? ` (${fmt(a.interestPaid)} was interest)` : ''}`).join('; ');
+  return `- This month (${nowLabel()}): ${allocs.length} extra payment${allocs.length !== 1 ? 's' : ''} already made — ${lines}. Deployed ${fmt(drawn)} of ~${fmt(free)} free cash; ~${fmt(Math.max(0, free - drawn))} still available. Base any "what should I do with my free cash" advice on the REMAINING amount.\n`;
 }
 
 // Summarise committed months so the AI can reason about trends over time.
