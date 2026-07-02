@@ -1602,7 +1602,7 @@ async function showVersionHistory() {
   box.style.display = 'flex';
   box.innerHTML = '<span class="modal-hint">Loading history…</span>';
   try {
-    const res = await fetch(`https://api.github.com/repos/${syncRepo()}/commits?path=${SYNC_PATH}&per_page=15`, {
+    const res = await fetch(`https://api.github.com/repos/${syncRepo()}/commits?path=${SYNC_PATH}&per_page=40`, {
       headers: { 'Authorization': 'Bearer ' + syncToken(), 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
