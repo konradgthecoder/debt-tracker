@@ -2486,8 +2486,11 @@ function recalc() {
     const mEl = document.getElementById(`months-${i}`);
     const pEl = document.getElementById(`payoff-${i}`);
     const iEl = document.getElementById(`int-${i}`);
-    if (mEl) mEl.textContent = isForeign && !cadRate ? 'set rate' : fmtMo(months);
-    if (pEl) pEl.textContent = isForeign && !cadRate ? '—' : payoffDate(months);
+    // rate set but no monthly payment = revolving/voluntary debt (e.g. credit card):
+    // paid via This-Month allocations, so there's no schedule to estimate
+    const isVoluntary = bal > 0.005 && debtRate > 0 && !(min > 0);
+    if (mEl) mEl.textContent = isForeign && !cadRate ? 'set rate' : isVoluntary ? 'voluntary' : fmtMo(months);
+    if (pEl) pEl.textContent = (isForeign && !cadRate) || isVoluntary ? '—' : payoffDate(months);
     const monthlyInt = bal * debtRate / 100 / 12;
     totalInt += monthlyInt;
     if (iEl) {
