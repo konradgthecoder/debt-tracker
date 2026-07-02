@@ -2435,7 +2435,8 @@ function revertApply(i) {
 
 function tmHistoryHtml() {
   const h = S.applyHistory || [];
-  if (!h.length) return '';
+  if (!h.length) return `<details style="margin-top:0.6rem"><summary style="font-size:0.72rem;color:var(--dim);cursor:pointer">↩ Apply history (none yet)</summary>
+    <div style="font-size:0.74rem;color:var(--muted);margin-top:0.4rem;line-height:1.5">Every <strong>Apply &amp; record</strong> from now on is saved here with a one-tap <em>revert</em> to the state from just before it. For anything older, use <strong>Sync / backup → ⏪ Version history</strong>.</div></details>`;
   return `<details style="margin-top:0.6rem"><summary style="font-size:0.72rem;color:var(--dim);cursor:pointer">↩ Apply history (${h.length})</summary>
     <div style="display:flex;flex-direction:column;gap:0.3rem;margin-top:0.4rem">${h.map((x, i) => {
       const when = new Date(x.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
