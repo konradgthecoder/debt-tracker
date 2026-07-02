@@ -1362,6 +1362,7 @@ function freshState() {
     cadRate: null, cadRateFetchedAt: null,
     log: [],
     lastAmortizedMonth: '',
+    applyHistory: [],
   };
 }
 
@@ -2279,7 +2280,8 @@ function renderThisMonth() {
     <button class="tm-apply" onclick="applyThisMonth()">✓ Apply &amp; record this month</button>
     <div class="tm-note">${amortized
       ? 'Loans already advanced for ' + month + ' — applying again records only the new payments.'
-      : 'Applying advances each loan one month (interest + minimum) and applies your extra payments.'}</div>`;
+      : 'Applying advances each loan one month (interest + minimum) and applies your extra payments.'}</div>
+    ${tmHistoryHtml()}`;
   updateTmTally();
 }
 
@@ -2309,6 +2311,22 @@ function applyThisMonth() {
   // a foreign-debt extra payment needs the CAD→PLN rate to convert; bail rather than divide by zero
   const needsRate = rows.some(r => (r.amount || 0) > 0 && r.target !== 'savings' && S.debts[r.target] && S.debts[r.target].type === 'foreign');
   if (needsRate && !cadRate) { toast('Set the CAD→PLN rate before recording a foreign-debt payment', 'err'); return; }
+
+  // 0) record a compact before-state so this apply can be reverted from the panel
+  const monthEntry = (S.log || []).find(r => r.month === month);
+  (S.applyHistory = S.applyHistory || []).unshift({
+    at: Date.now(),
+    label: rows.filter(r => (r.amount || 0) > 0)
+      .map(r => (r.target === 'savings' ? 'Savings' : (S.debts[r.target] || {}).name || 'Debt') + ' ' + fmt0(r.amount)).join(', ') || 'monthly rata only',
+    before: {
+      debts: JSON.parse(JSON.stringify(S.debts)),
+      savings: S.savings,
+      lastAmortizedMonth: S.lastAmortizedMonth || '',
+      monthEntry: monthEntry ? JSON.parse(JSON.stringify(monthEntry)) : null,
+      month,
+    },
+  });
+  S.applyHistory = S.applyHistory.slice(0, 10);
 
   // 1) amortize each loan once for the month
   if (willAmortize) {
@@ -2369,6 +2387,37 @@ function tmRecordMonth(month, allocations) {
   };
   if (existing) Object.assign(existing, base);
   else S.log.unshift({ notes: '', ...base });
+}
+
+// Revert an apply: restore the captured before-state (balances, savings, the month's
+// log entry, amortization marker). Reverting entry i rolls back that apply AND any
+// later ones, since the snapshot predates them.
+function revertApply(i) {
+  const h = (S.applyHistory || [])[i]; if (!h) return;
+  const when = new Date(h.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  if (!confirm(`Revert to the state from just before ${when} (${h.label})?\n\nThis undoes that apply and anything applied after it.`)) return;
+  S.debts = h.before.debts;
+  S.savings = h.before.savings;
+  S.lastAmortizedMonth = h.before.lastAmortizedMonth;
+  const li = (S.log || []).findIndex(r => r.month === h.before.month);
+  if (h.before.monthEntry) { if (li >= 0) S.log[li] = h.before.monthEntry; else S.log.unshift(h.before.monthEntry); }
+  else if (li >= 0) S.log.splice(li, 1);
+  S.applyHistory = S.applyHistory.slice(i + 1); // this snapshot and newer ones are now history
+  tmState.rows = null; tmState.freeOverride = null;
+  persist(); renderAll();
+  toast('Reverted to before ' + when + ' ✓', 'ok');
+}
+
+function tmHistoryHtml() {
+  const h = S.applyHistory || [];
+  if (!h.length) return '';
+  return `<details style="margin-top:0.6rem"><summary style="font-size:0.72rem;color:var(--dim);cursor:pointer">↩ Apply history (${h.length})</summary>
+    <div style="display:flex;flex-direction:column;gap:0.3rem;margin-top:0.4rem">${h.map((x, i) => {
+      const when = new Date(x.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;font-size:0.74rem">
+        <span style="color:var(--muted)">${when} — ${esc(x.label)}</span>
+        <span class="tm-use" onclick="revertApply(${i})">revert</span></div>`;
+    }).join('')}</div></details>`;
 }
 
 function tmPromptRata(idx) {
