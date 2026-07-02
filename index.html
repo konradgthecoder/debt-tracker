@@ -775,8 +775,10 @@ html, body { max-width: 100%; overflow-x: clip; }
         <span class="modal-hint">Synced to <strong id="sync-on-repo"></strong>. Changes save automatically; opening on another device pulls the latest.</span>
         <div class="modal-btns">
           <button class="btn btn-primary" onclick="syncPull(true)">↓ Pull latest now</button>
+          <button class="btn btn-ghost" onclick="showVersionHistory()">⏪ Version history</button>
           <button class="btn btn-ghost" onclick="disconnectSync()">Disconnect</button>
         </div>
+        <div id="ver-history" style="display:none;flex-direction:column;gap:0.4rem"></div>
       </div>
     </div>
 
@@ -1561,6 +1563,50 @@ async function syncPull(force) {
   } catch (e) {
     setSyncStatus('offline', 'err');
   }
+}
+
+// ── Version history: every sync is a commit in the data repo, so any past state
+// can be restored. Restoring writes the old state as the NEW current state (a new
+// commit), so a restore is itself undoable.
+async function showVersionHistory() {
+  const box = document.getElementById('ver-history'); if (!box) return;
+  if (box.style.display === 'flex') { box.style.display = 'none'; return; }
+  box.style.display = 'flex';
+  box.innerHTML = '<span class="modal-hint">Loading history…</span>';
+  try {
+    const res = await fetch(`https://api.github.com/repos/${syncRepo()}/commits?path=${SYNC_PATH}&per_page=15`, {
+      headers: { 'Authorization': 'Bearer ' + syncToken(), 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const commits = await res.json();
+    if (!commits.length) { box.innerHTML = '<span class="modal-hint">No history yet.</span>'; return; }
+    box.innerHTML = '<span class="modal-hint">Each save is a version. Restoring makes that state current again (and is itself undoable — nothing is deleted).</span>'
+      + commits.map((c, i) => {
+        const d = new Date(c.commit.author.date);
+        const when = d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;font-size:0.8rem">
+          <span style="color:var(--muted);font-variant-numeric:tabular-nums">${when}${i === 0 ? ' <span style="color:var(--teal)">(current)</span>' : ''}</span>
+          ${i === 0 ? '' : `<button class="btn btn-ghost" style="font-size:0.72rem;padding:0.15rem 0.6rem" onclick="restoreVersion('${c.sha}','${when.replace(/'/g, '')}')">restore</button>`}
+        </div>`;
+      }).join('');
+  } catch (e) { box.innerHTML = '<span class="modal-hint" style="color:var(--coral)">Could not load history: ' + esc(e.message) + '</span>'; }
+}
+
+async function restoreVersion(sha, when) {
+  if (!confirm(`Restore your data to the version from ${when}?\n\nYour current state stays in history, so you can restore back if needed.`)) return;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${syncRepo()}/contents/${SYNC_PATH}?ref=${sha}`, {
+      headers: { 'Authorization': 'Bearer ' + syncToken(), 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    S = normalizeState(JSON.parse(b64decode(data.content)));
+    persist();          // bumps updatedAt + pushes, so every device adopts the restored state
+    renderAll();
+    tmState.rows = null; tmState.freeOverride = null; renderThisMonth();
+    closeDataModal();
+    toast('Restored version from ' + when + ' ✓', 'ok');
+  } catch (e) { toast('Restore failed: ' + e.message, 'err'); }
 }
 
 function scheduleSyncPush() {
