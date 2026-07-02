@@ -2383,6 +2383,12 @@ function tmPromptRata(idx) {
 function recalc() {
   S.income  = parseNum(document.getElementById('s-income').value)  || 0;
   S.savings = parseNum(document.getElementById('s-savings').value) || 0;
+  // original = the debt's high-water mark: if the balance climbs above it (new
+  // spending, accrued interest), raise it so payoff progress stays meaningful
+  S.debts.forEach(d => {
+    const bal = parseFloat(d.balance) || 0;
+    if (bal > (parseFloat(d.original) || 0)) d.original = bal;
+  });
   persist();
 
   updateRateBar();
