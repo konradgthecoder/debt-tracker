@@ -2920,6 +2920,31 @@ function renderAllocation() {
           <div class="ratio-note">${r.note}</div>
         </div>`;
     }).join('');
+
+    // ── money-flow insights: interest vs paydown, and minimums freeing up soon ──
+    let intMo = 0;
+    const clearing = [];
+    S.debts.forEach(d => {
+      const isF = d.type === 'foreign', r2 = isF ? cadRate : 1;
+      const bal = (parseFloat(d.balance) || 0) * r2, min = (parseFloat(d.min) || 0) * r2;
+      if (bal <= 0.005) return;
+      intMo += bal * (parseFloat(d.rate) || 0) / 100 / 12;
+      const mo = calcMonths(bal, parseFloat(d.rate) || 0, min);
+      if (min > 0 && Number.isFinite(mo) && mo > 0 && mo <= 12) clearing.push({ name: d.name || 'Debt', mo, min });
+    });
+    clearing.sort((a, b) => a.mo - b.mo);
+    const lines = [];
+    if (debtPay > 0 && intMo > 0.005) {
+      lines.push(`Of your <strong>${fmt(debtPay)}</strong>/mo debt payments, <strong style="color:var(--coral)">${fmt(intMo)}</strong> is interest (${Math.round(intMo / debtPay * 100)}% burned, ${Math.round(intMo / income * 100)}% of income) — <strong style="color:var(--green)">${fmt(debtPay - intMo)}</strong> actually pays balances down.`);
+    }
+    if (clearing.length) {
+      const freed = clearing.reduce((s, c) => s + c.min, 0);
+      const next = clearing[0];
+      lines.push(`Freed-up cash ahead: <strong>${esc(next.name)}</strong> clears in ~${Math.ceil(next.mo)} mo (+${fmt0(next.min)}/mo)${clearing.length > 1 ? `; within 12 months ${clearing.length} debts clear, freeing <strong style="color:var(--teal)">+${fmt0(freed)}/mo</strong>` : ''}.`);
+    }
+    if (lines.length) {
+      insights.innerHTML += `<div style="display:flex;flex-direction:column;gap:0.45rem;padding-top:0.8rem;border-top:1px solid var(--border);font-size:0.78rem;color:var(--muted);line-height:1.5">${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
+    }
   } else {
     insights.style.display = 'none';
   }
