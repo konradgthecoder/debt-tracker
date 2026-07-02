@@ -2568,6 +2568,41 @@ function recalc() {
       `;
       ppEl.appendChild(item);
     });
+
+    // ── overall progress: totals in PLN, vs high-water originals ──
+    let origAll = 0, balAll = 0, origCons = 0, balCons = 0, cleared = 0, started = 0;
+    S.debts.forEach(d => {
+      const isF = d.type === 'foreign', r = isF ? cadRate : 1;
+      const bal = (parseFloat(d.balance) || 0) * r;
+      const orig = ((parseFloat(d.original) || 0) || (parseFloat(d.balance) || 0)) * r;
+      if (orig <= 0) return;
+      started++;
+      if (bal <= 0.005) cleared++;
+      origAll += orig; balAll += bal;
+      if (d.type !== 'mortgage') { origCons += orig; balCons += bal; }
+    });
+    const totalBar = (label, orig, bal, color) => {
+      if (!(orig > 0)) return '';
+      const pct = Math.max(0, Math.min(100, ((orig - bal) / orig) * 100));
+      return `<div class="prog-item">
+        <div class="prog-row">
+          <span style="color:var(--text);font-weight:650">${label}</span>
+          <span style="color:var(--muted)">${fmt(orig - bal)} of ${fmt(orig)} · <strong style="color:${color}">${pct.toFixed(1)}%</strong></span>
+        </div>
+        <div class="prog-bar-bg"><div class="prog-bar" style="width:${pct}%;background:${color}"></div></div>
+      </div>`;
+    };
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin-top:0.6rem;padding-top:0.7rem;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:0.55rem';
+    // smart insight line: cleared count, consumer-free momentum
+    const consPct = origCons > 0 ? ((origCons - balCons) / origCons) * 100 : 0;
+    const insight = started
+      ? `You've paid off <strong style="color:var(--green)">${fmt(origAll - balAll)}</strong> so far · <strong>${cleared}</strong> of ${started} debts fully cleared${origCons > 0 ? ` · consumer debt is <strong style="color:var(--teal)">${consPct.toFixed(0)}%</strong> gone` : ''}${totalInt > 0.005 ? ` · current interest bleed <strong style="color:var(--coral)">${fmt(totalInt)}/mo</strong>` : ''}`
+      : '';
+    wrap.innerHTML = (insight ? `<div style="font-size:0.78rem;color:var(--muted);line-height:1.5">${insight}</div>` : '')
+      + totalBar('Consumer debt (excl. mortgage)', origCons, balCons, 'var(--teal)')
+      + totalBar('All debt', origAll, balAll, 'var(--amber)');
+    ppEl.appendChild(wrap);
   } else {
     ppEl.innerHTML = '<div style="color:var(--dim);font-size:0.85rem;">Fill in balances &amp; payments above.</div>';
   }
