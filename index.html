@@ -1532,6 +1532,7 @@ const SYNC_PATH = 'data.json';
 let syncSha = null;
 let _syncPushTimer = null;
 let _syncing = false;
+let _syncLabel = null; // one-shot tag for the next push's commit message (shown in Version history)
 
 function syncToken() { return localStorage.getItem(SYNC_TOKEN_KEY) || ''; }
 function syncRepo()  { return localStorage.getItem(SYNC_REPO_KEY) || DEFAULT_SYNC_REPO; }
@@ -1611,9 +1612,10 @@ async function showVersionHistory() {
       + commits.map((c, i) => {
         const d = new Date(c.commit.author.date);
         const when = d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        const tag = (c.commit.message.split(' — ')[1] || '').trim(); // action label after the timestamp
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;font-size:0.8rem">
-          <span style="color:var(--muted);font-variant-numeric:tabular-nums">${when}${i === 0 ? ' <span style="color:var(--teal)">(current)</span>' : ''}</span>
-          ${i === 0 ? '' : `<button class="btn btn-ghost" style="font-size:0.72rem;padding:0.15rem 0.6rem" onclick="restoreVersion('${c.sha}','${when.replace(/'/g, '')}')">restore</button>`}
+          <span style="color:var(--muted);font-variant-numeric:tabular-nums;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${when}${i === 0 ? ' <span style="color:var(--teal)">(current)</span>' : ''}${tag ? ` <span style="color:var(--text)">· ${esc(tag)}</span>` : ''}</span>
+          ${i === 0 ? '' : `<button class="btn btn-ghost" style="font-size:0.72rem;padding:0.15rem 0.6rem;flex-shrink:0" onclick="restoreVersion('${c.sha}','${when.replace(/'/g, '')}')">restore</button>`}
         </div>`;
       }).join('');
   } catch (e) { box.innerHTML = '<span class="modal-hint" style="color:var(--coral)">Could not load history: ' + esc(e.message) + '</span>'; }
@@ -1628,6 +1630,7 @@ async function restoreVersion(sha, when) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     S = normalizeState(JSON.parse(b64decode(data.content)));
+    _syncLabel = '⏪ restored version from ' + when;
     persist();          // bumps updatedAt + pushes, so every device adopts the restored state
     renderAll();
     tmState.rows = null; tmState.freeOverride = null; renderThisMonth();
@@ -1649,9 +1652,10 @@ async function syncPush(immediate) {
   setSyncStatus('saving…', 'busy');
   try {
     const body = {
-      message: `update ${new Date().toISOString()}`,
+      message: `update ${new Date().toISOString()}${_syncLabel ? ' — ' + _syncLabel : ''}`,
       content: b64encode(JSON.stringify(S, null, 2)),
     };
+    _syncLabel = null;
     if (syncSha) body.sha = syncSha;
     let res = await ghContents('PUT', body);
     if (res.status === 409 || res.status === 422) {
@@ -2228,6 +2232,7 @@ function snapshotNow() {
     savings: S.savings || '',
     detail:  snapshotDetail(),
   };
+  _syncLabel = '📸 monthly snapshot ' + today;
   if (existing) {
     Object.assign(existing, base);
     persist(); renderLog();
@@ -2390,6 +2395,7 @@ function applyThisMonth() {
   renderAll();
   tmRecordMonth(month, allocations);
   tmState.rows = null; tmState.freeOverride = null;
+  _syncLabel = '📸 apply ' + month + (allocations.length ? ': ' + allocations.map(a => a.target + ' ' + fmt0(a.amount)).join(', ') : ' (rata only)');
   persist();
   renderLog();
   recalc();          // re-run now the month's allocations are recorded (deployed strip, panel)
@@ -2429,6 +2435,7 @@ function revertApply(i) {
   else if (li >= 0) S.log.splice(li, 1);
   S.applyHistory = S.applyHistory.slice(i + 1); // this snapshot and newer ones are now history
   tmState.rows = null; tmState.freeOverride = null;
+  _syncLabel = '↩ revert apply (' + h.label + ')';
   persist(); renderAll();
   toast('Reverted to before ' + when + ' ✓', 'ok');
 }
